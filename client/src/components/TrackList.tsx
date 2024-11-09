@@ -16,6 +16,13 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
     ? tracks.filter(track => track.album === selectedAlbum.name)
     : tracks;
 
+  // Debug log for filtered tracks
+  console.debug('[TrackList] Filtered Tracks:', {
+    albumName: selectedAlbum?.name,
+    trackCount: filteredTracks.length,
+    sampleTrack: filteredTracks[0]
+  });
+
   // Group tracks by album if no specific album is selected
   const tracksByAlbum = filteredTracks.reduce((acc, track) => {
     if (!selectedAlbum) {
@@ -33,6 +40,16 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
     return acc;
   }, {} as Record<string, Track[]>);
 
+  // Helper function to get display name for track
+  const getTrackDisplayName = (track: Track) => {
+    if (!track.fileName) {
+      // Fallback if fileName is not set
+      const parts = track.key.split('/');
+      return parts[parts.length - 1].replace(/\.[^/.]+$/, '');
+    }
+    return track.fileName;
+  };
+
   return (
     <ScrollArea className="h-[calc(100vh-16rem)] w-full rounded-md border">
       <div className="p-4 space-y-6">
@@ -49,7 +66,7 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
                 onClick={() => onSelect(track)}
               >
                 <PlayCircle className="mr-2 h-4 w-4" />
-                <span className="truncate">{track.fileName}</span>
+                <span className="truncate">{getTrackDisplayName(track)}</span>
               </Button>
             ))}
           </div>

@@ -43,8 +43,17 @@ export function Home() {
     
     tracks.forEach(track => {
       const parts = track.key.split('/');
+      // Extract album name and filename
       const album = parts.length > 1 ? parts[0] : 'Unknown Album';
-      const fileName = parts[parts.length - 1];
+      const fileName = parts[parts.length - 1].replace(/\.[^/.]+$/, ''); // Remove file extension
+      
+      // Debug log for track processing
+      console.debug('[Track Processing]', {
+        key: track.key,
+        album,
+        fileName,
+        parts
+      });
       
       const processedTrack = {
         ...track,
@@ -57,6 +66,15 @@ export function Home() {
       }
       albumMap.get(album)!.push(processedTrack);
     });
+    
+    // Debug log for album structure
+    console.debug('[Albums Structure]', 
+      Array.from(albumMap.entries()).map(([name, tracks]) => ({
+        name,
+        trackCount: tracks.length,
+        sampleTrack: tracks[0]?.fileName
+      }))
+    );
     
     return Array.from(albumMap.entries()).map(([name, tracks]) => ({
       name,
@@ -140,6 +158,11 @@ export function Home() {
   };
 
   const handleAlbumSelect = (album: Album) => {
+    console.debug('[Album Selected]', {
+      name: album.name,
+      trackCount: album.tracks.length,
+      firstTrack: album.tracks[0]
+    });
     setSelectedAlbum(album);
     setViewMode('list');
     if (album.tracks.length > 0) {
