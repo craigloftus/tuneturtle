@@ -41,6 +41,16 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
     <Card className="p-6 max-w-2xl mx-auto">
       <h2 className="text-2xl font-bold mb-6">AWS S3 Configuration</h2>
       
+      <div className="prose dark:prose-invert mb-6">
+        <h3>IAM Setup Instructions</h3>
+        <ol>
+          <li>Create a new IAM user in your AWS console</li>
+          <li>Attach the AmazonS3ReadOnlyAccess policy</li>
+          <li>Generate access keys for the user</li>
+          <li>Enter the credentials below</li>
+        </ol>
+      </div>
+      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField

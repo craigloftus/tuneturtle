@@ -40,16 +40,6 @@ export function Setup() {
         </p>
         
         <S3Setup onSubmit={handleSubmit} isLoading={isLoading} />
-        
-        <div className="prose dark:prose-invert">
-          <h2>IAM Setup Instructions</h2>
-          <ol>
-            <li>Create a new IAM user in your AWS console</li>
-            <li>Attach the AmazonS3ReadOnlyAccess policy</li>
-            <li>Generate access keys for the user</li>
-            <li>Enter the credentials above</li>
-          </ol>
-        </div>
       </div>
     </div>
   );

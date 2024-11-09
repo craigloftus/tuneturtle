@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, SkipForward, SkipBack, Volume2 } from "lucide-react";
-import { audioController } from '@/lib/audio';
+import { Play, Pause, SkipForward, SkipBack, Volume2, AlertCircle } from "lucide-react";
+import { audioController, AudioError } from '@/lib/audio';
 import { Track } from '@/types/aws';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
 
 interface AudioPlayerProps {
   track: Track | null;
@@ -17,51 +19,123 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (track) {
-      audioController.load(track.url).then(() => {
-        setDuration(audioController.getDuration());
-      });
-    }
-  }, [track]);
+    const loadTrack = async () => {
+      if (track) {
+        try {
+          setError(null);
+          await audioController.load(track.url);
+          setDuration(audioController.getDuration());
+        } catch (err) {
+          const audioError = err as AudioError;
+          const errorMessage = `Failed to load track: ${audioError.message}`;
+          console.error(errorMessage, audioError);
+          setError(errorMessage);
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: errorMessage,
+          });
+        }
+      }
+    };
+
+    loadTrack();
+  }, [track, toast]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTime(audioController.getCurrentTime());
+      try {
+        setCurrentTime(audioController.getCurrentTime());
+      } catch (err) {
+        console.error('Error updating current time:', err);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const togglePlayPause = () => {
-    if (isPlaying) {
-      audioController.pause();
-    } else {
-      audioController.play();
+  const togglePlayPause = async () => {
+    try {
+      setError(null);
+      if (isPlaying) {
+        audioController.pause();
+      } else {
+        await audioController.play();
+      }
+      setIsPlaying(!isPlaying);
+    } catch (err) {
+      const audioError = err as AudioError;
+      const errorMessage = `Playback error: ${audioError.message}`;
+      console.error(errorMessage, audioError);
+      setError(errorMessage);
+      setIsPlaying(false);
+      toast({
+        variant: "destructive",
+        title: "Playback Error",
+        description: errorMessage,
+      });
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleSeek = (value: number[]) => {
-    audioController.seek(value[0]);
-    setCurrentTime(value[0]);
+    try {
+      audioController.seek(value[0]);
+      setCurrentTime(value[0]);
+    } catch (err) {
+      const audioError = err as AudioError;
+      console.error('Seek error:', audioError);
+      toast({
+        variant: "destructive",
+        title: "Seek Error",
+        description: audioError.message,
+      });
+    }
   };
 
   const handleVolumeChange = (value: number[]) => {
-    const newVolume = value[0];
-    audioController.setVolume(newVolume);
-    setVolume(newVolume);
+    try {
+      const newVolume = value[0];
+      audioController.setVolume(newVolume);
+      setVolume(newVolume);
+    } catch (err) {
+      const audioError = err as AudioError;
+      console.error('Volume control error:', audioError);
+      toast({
+        variant: "destructive",
+        title: "Volume Control Error",
+        description: audioError.message,
+      });
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   if (!track) return null;
 
   return (
     <Card className="p-4 fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t">
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
       <div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{track.key}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </p>
           </div>
           <div className="flex items-center space-x-2">
             <Volume2 className="h-4 w-4" />
@@ -78,7 +152,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
         <div className="space-y-2">
           <Slider
             value={[currentTime]}
-            max={duration}
+            max={duration || 100}
             step={1}
             onValueChange={handleSeek}
           />
@@ -96,6 +170,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
               variant="outline"
               size="icon"
               onClick={togglePlayPause}
+              disabled={!!error}
             >
               {isPlaying ? (
                 <Pause className="h-4 w-4" />
