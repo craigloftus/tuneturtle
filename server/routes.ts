@@ -1,7 +1,6 @@
 import { Express, Request, Response, NextFunction } from "express";
-import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { S3Client, ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 let s3Client: S3Client | null = null;
 
@@ -39,6 +38,40 @@ const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+async function validateBucketPermissions(s3: S3Client, bucket: string) {
+  try {
+    // Test ListBucket permission
+    const listCommand = new ListObjectsV2Command({
+      Bucket: bucket,
+      MaxKeys: 1,
+    });
+    await s3.send(listCommand);
+
+    // Test GetObject permission by attempting to get a signed URL
+    const objects = await s3.send(listCommand);
+    if (objects.Contents && objects.Contents.length > 0) {
+      const getCommand = new GetObjectCommand({
+        Bucket: bucket,
+        Key: objects.Contents[0].Key!,
+      });
+      await getSignedUrl(s3, getCommand, { expiresIn: 3600 });
+    }
+
+    return true;
+  } catch (error) {
+    console.error("[Permission Check] Error:", error);
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+      if (errorMessage.includes('access denied') || 
+          errorMessage.includes('forbidden') || 
+          errorMessage.includes('not authorized')) {
+        throw new Error('Insufficient permissions. Please check your IAM policy.');
+      }
+    }
+    throw error;
+  }
+}
+
 export function registerRoutes(app: Express) {
   // Add request logging middleware
   app.use('/api', requestLogger);
@@ -54,14 +87,9 @@ export function registerRoutes(app: Express) {
         region,
       });
 
-      // Test the credentials by listing objects
-      const command = new ListObjectsV2Command({
-        Bucket: bucket,
-        MaxKeys: 1,
-      });
-
-      await s3Client.send(command);
-      console.log(`[AWS Validate] Successfully validated credentials for bucket: ${bucket}`);
+      // Validate required permissions
+      await validateBucketPermissions(s3Client, bucket);
+      console.log(`[AWS Validate] Successfully validated credentials and permissions for bucket: ${bucket}`);
 
       // Store credentials in session
       req.session.awsConfig = { accessKeyId, secretAccessKey, region, bucket };
@@ -69,9 +97,11 @@ export function registerRoutes(app: Express) {
       res.json({ success: true });
     } catch (error) {
       console.error("[AWS Validate] Error validating credentials:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
       res.status(401).json({ 
-        error: "Invalid AWS credentials",
-        message: error instanceof Error ? error.message : "Unknown error occurred"
+        error: "AWS Configuration Error",
+        message: errorMessage
       });
     }
   });
@@ -133,9 +163,11 @@ export function registerRoutes(app: Express) {
       res.json(tracks);
     } catch (error) {
       console.error("[AWS List] Error listing S3 objects:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
       res.status(500).json({ 
         error: "Failed to list S3 objects",
-        message: error instanceof Error ? error.message : "Unknown error occurred"
+        message: errorMessage
       });
     }
   });
