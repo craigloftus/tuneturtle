@@ -1,22 +1,86 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { Track } from "@/types/aws";
 import { TrackList } from "@/components/TrackList";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2 } from "lucide-react";
 
 export function Home() {
   const [, navigate] = useLocation();
-  const { data: tracks, error } = useSWR<Track[]>("/api/aws/list");
+  const { toast } = useToast();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const [isTimeout, setIsTimeout] = useState(false);
 
-  if (error?.message === "No credentials") {
-    navigate("/setup");
-    return null;
+  const { data: tracks, error, isLoading } = useSWR<Track[]>("/api/aws/list", {
+    onError: (err) => {
+      console.error("[Home] Track loading error:", err);
+      if (err.status === 401 || err.info?.error === "No credentials") {
+        navigate("/setup");
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error loading tracks",
+          description: err.info?.message || "Failed to load tracks. Please try again.",
+        });
+      }
+    },
+    revalidateOnFocus: false,
+  });
+
+  // Set up loading timeout
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        setIsTimeout(true);
+        console.warn("[Home] Loading timeout reached");
+      }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timeoutId);
+  }, [isLoading]);
+
+  if (error?.status === 401 || error?.info?.error === "No credentials") {
+    return null; // Navigation will happen in onError
   }
 
-  if (!tracks) {
-    return <div className="p-8">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">
+            {isTimeout ? "Still loading... This is taking longer than usual." : "Loading tracks..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-4">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load tracks: {error.info?.message || "Unknown error occurred"}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (!tracks?.length) {
+    return (
+      <div className="container mx-auto p-4">
+        <Alert>
+          <AlertDescription>
+            No music tracks found in your S3 bucket. Upload some audio files to get started.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
   }
 
   const currentIndex = currentTrack 

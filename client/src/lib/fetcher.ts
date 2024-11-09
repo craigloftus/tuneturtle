@@ -10,18 +10,45 @@ export class FetchError extends Error {
 
 // Fetcher function for SWR that includes credentials and handles non-200 responses
 export const fetcher = async (url: string) => {
-  const res = await fetch(url, {
-    credentials: "include",
-  });
+  console.debug(`[Fetch Request] ${url}`);
+  const startTime = performance.now();
 
-  if (!res.ok) {
-    const error = new FetchError(
-      `A ${res.status} error occurred while fetching the data.`,
-      await res.json(),
-      res.status,
-    );
+  try {
+    const res = await fetch(url, {
+      credentials: "include",
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const endTime = performance.now();
+    console.debug(`[Fetch Response] ${url} - Status: ${res.status} - Time: ${Math.round(endTime - startTime)}ms`);
+
+    if (!res.ok) {
+      let errorInfo;
+      try {
+        errorInfo = await res.json();
+      } catch (e) {
+        errorInfo = { message: 'Failed to parse error response' };
+      }
+
+      console.error(`[Fetch Error] ${url}:`, {
+        status: res.status,
+        info: errorInfo,
+      });
+
+      throw new FetchError(
+        `Request failed with status ${res.status}`,
+        errorInfo,
+        res.status,
+      );
+    }
+
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error(`[Fetch Error] ${url}:`, error);
     throw error;
   }
-
-  return res.json();
 };
