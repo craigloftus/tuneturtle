@@ -28,7 +28,7 @@ const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
-  res.header('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges');
+  res.header('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Disposition');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -137,14 +137,15 @@ export function registerRoutes(app: Express) {
 
       const tracks = await Promise.all(
         (response.Contents || [])
-          .filter(obj => obj.Key?.match(/\.(mp3|wav|ogg|m4a)$/i))
+          .filter(obj => obj.Key?.toLowerCase().match(/\.mp3$/i))
           .map(async obj => {
             const getObjectCommand = new GetObjectCommand({
               Bucket: bucket,
               Key: obj.Key,
+              ResponseContentType: 'audio/mpeg',
+              ResponseContentDisposition: `attachment; filename="${encodeURIComponent(obj.Key || '')}"`,
             });
             
-            // Add response-content-type parameter to ensure proper content type
             const url = await getSignedUrl(s3Client!, getObjectCommand, {
               expiresIn: 3600,
             });
@@ -154,7 +155,7 @@ export function registerRoutes(app: Express) {
               size: obj.Size,
               lastModified: obj.LastModified,
               url,
-              contentType: getContentType(obj.Key || ''),
+              contentType: 'audio/mpeg',
             };
           })
       );
@@ -171,21 +172,4 @@ export function registerRoutes(app: Express) {
       });
     }
   });
-}
-
-// Helper function to determine content type based on file extension
-function getContentType(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'mp3':
-      return 'audio/mpeg';
-    case 'wav':
-      return 'audio/wav';
-    case 'ogg':
-      return 'audio/ogg';
-    case 'm4a':
-      return 'audio/mp4';
-    default:
-      return 'application/octet-stream';
-  }
 }

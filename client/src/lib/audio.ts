@@ -16,6 +16,7 @@ export class AudioController {
   private maxRetries: number = 3;
   private retryDelay: number = 1000; // 1 second
   private isConnected: boolean = false;
+  private supportedFormats = ['audio/mpeg'];
 
   constructor() {
     this.audio = new Audio();
@@ -35,13 +36,39 @@ export class AudioController {
     this.audio.crossOrigin = 'anonymous';
   }
 
+  private validateAudioFormat(url: string, contentType?: string): boolean {
+    // Check content type if provided
+    if (contentType && !this.supportedFormats.includes(contentType)) {
+      throw new AudioError(
+        `Unsupported audio format: ${contentType}. Only MP3 format is supported.`,
+        'FORMAT_ERROR'
+      );
+    }
+
+    // Check file extension
+    const fileExtension = url.split('.').pop()?.toLowerCase();
+    if (!fileExtension || !['mp3'].includes(fileExtension)) {
+      throw new AudioError(
+        'Unsupported file format. Only MP3 files are supported.',
+        'FORMAT_ERROR'
+      );
+    }
+
+    return true;
+  }
+
   private async setupAudioContext() {
     try {
+      // Clean up existing context and connections first
       await this.cleanupAudioContext();
       
+      // Create new context
       this.context = new AudioContext();
       this.gainNode = this.context.createGain();
       this.gainNode.connect(this.context.destination);
+
+      // Wait for any previous operations to complete
+      await new Promise(resolve => setTimeout(resolve, 0));
       
       // Create new source and connect it
       this.source = this.context.createMediaElementSource(this.audio);
@@ -83,11 +110,11 @@ export class AudioController {
           errorCode = 'NETWORK_ERROR';
           break;
         case MediaError.MEDIA_ERR_DECODE:
-          errorMessage = 'Audio decoding failed';
+          errorMessage = 'Audio decoding failed - file may be corrupted or unsupported';
           errorCode = 'DECODE_ERROR';
           break;
         case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMessage = 'Audio format not supported';
+          errorMessage = 'Audio format not supported by your browser';
           errorCode = 'FORMAT_ERROR';
           break;
       }
@@ -112,7 +139,7 @@ export class AudioController {
     try {
       return await operation();
     } catch (error) {
-      if (retries > 0) {
+      if (retries > 0 && !(error instanceof AudioError && error.code === 'FORMAT_ERROR')) {
         this.logDebug(`Retrying operation. Attempts remaining: ${retries}`);
         await new Promise(resolve => setTimeout(resolve, this.retryDelay));
         return this.retry(operation, retries - 1);
@@ -144,14 +171,18 @@ export class AudioController {
     }
   }
 
-  async load(url: string) {
+  async load(url: string, contentType?: string) {
     return this.retry(async () => {
       try {
         this.logDebug(`Loading audio from URL: ${url}`);
         
+        // Validate format before attempting to load
+        this.validateAudioFormat(url, contentType);
+        
         // Reset audio element
         this.audio.pause();
         this.audio.src = '';
+        await this.audio.load();
         
         // Setup fresh audio context and connections
         await this.setupAudioContext();
@@ -174,6 +205,11 @@ export class AudioController {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         this.logDebug(`Error loading audio: ${message}`);
+        
+        // Pass through format errors without wrapping
+        if (error instanceof AudioError && error.code === 'FORMAT_ERROR') {
+          throw error;
+        }
         
         // Check for CORS-specific errors
         if (message.includes('CORS') || message.includes('cross-origin')) {
