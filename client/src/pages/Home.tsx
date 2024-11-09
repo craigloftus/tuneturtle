@@ -7,7 +7,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Grid, List } from "lucide-react";
+import { Loader2, Grid, List, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -16,6 +16,7 @@ export function Home() {
   const { toast } = useToast();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [isTimeout, setIsTimeout] = useState(false);
 
   const { data: tracks, error, isLoading } = useSWR<Track[]>("/api/aws/list", {
@@ -139,15 +140,39 @@ export function Home() {
   };
 
   const handleAlbumSelect = (album: Album) => {
+    setSelectedAlbum(album);
+    setViewMode('list');
     if (album.tracks.length > 0) {
       setCurrentTrack(album.tracks[0]);
     }
   };
 
+  const handleBackToGrid = () => {
+    setViewMode('grid');
+    setSelectedAlbum(null);
+  };
+
   return (
     <div className="container mx-auto p-4 pb-32">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Music Player</h1>
+        <div className="flex items-center space-x-4">
+          {viewMode === 'list' && selectedAlbum && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleBackToGrid}
+              className="mr-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <h1 className="text-3xl font-bold">
+            {viewMode === 'list' && selectedAlbum 
+              ? selectedAlbum.name
+              : 'Music Player'
+            }
+          </h1>
+        </div>
         <div className="flex items-center space-x-2">
           <Button
             variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
@@ -185,6 +210,7 @@ export function Home() {
               tracks={tracks}
               onSelect={setCurrentTrack}
               currentTrack={currentTrack}
+              selectedAlbum={selectedAlbum}
             />
           )}
         </motion.div>
