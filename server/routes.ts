@@ -23,9 +23,26 @@ const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+// CORS middleware for audio streaming
+const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  // Set CORS headers
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
+  res.header('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  
+  next();
+};
+
 export function registerRoutes(app: Express) {
   // Add request logging middleware
   app.use('/api', requestLogger);
+  app.use('/api', corsMiddleware);
 
   app.post("/api/aws/validate", async (req, res) => {
     const { accessKeyId, secretAccessKey, region, bucket } = req.body;
@@ -97,6 +114,7 @@ export function registerRoutes(app: Express) {
               Key: obj.Key,
             });
             
+            // Add response-content-type parameter to ensure proper content type
             const url = await getSignedUrl(s3Client!, getObjectCommand, {
               expiresIn: 3600,
             });
@@ -106,6 +124,7 @@ export function registerRoutes(app: Express) {
               size: obj.Size,
               lastModified: obj.LastModified,
               url,
+              contentType: getContentType(obj.Key || ''),
             };
           })
       );
@@ -120,4 +139,21 @@ export function registerRoutes(app: Express) {
       });
     }
   });
+}
+
+// Helper function to determine content type based on file extension
+function getContentType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'ogg':
+      return 'audio/ogg';
+    case 'm4a':
+      return 'audio/mp4';
+    default:
+      return 'application/octet-stream';
+  }
 }

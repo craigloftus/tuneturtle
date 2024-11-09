@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, SkipForward, SkipBack, Volume2, AlertCircle } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Volume2, AlertCircle, RefreshCw } from "lucide-react";
 import { audioController, AudioError } from '@/lib/audio';
 import { Track } from '@/types/aws';
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -20,31 +20,44 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const loadTrack = async () => {
-      if (track) {
-        try {
-          setError(null);
-          await audioController.load(track.url);
-          setDuration(audioController.getDuration());
-        } catch (err) {
-          const audioError = err as AudioError;
-          const errorMessage = `Failed to load track: ${audioError.message}`;
-          console.error(errorMessage, audioError);
-          setError(errorMessage);
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: errorMessage,
-          });
-        }
-      }
-    };
+  const loadTrack = useCallback(async (retryAttempt: number = 0) => {
+    if (!track) return;
 
+    try {
+      setError(null);
+      setIsRetrying(false);
+      await audioController.load(track.url);
+      setDuration(audioController.getDuration());
+      if (isPlaying) {
+        await audioController.play();
+      }
+    } catch (err) {
+      const audioError = err as AudioError;
+      let errorMessage = `Failed to load track: ${audioError.message}`;
+      
+      // Handle CORS errors specifically
+      if (audioError.code === 'CORS_ERROR') {
+        errorMessage = 'Unable to access audio file due to cross-origin restrictions. Please try again or contact support.';
+      }
+      
+      console.error(errorMessage, audioError);
+      setError(errorMessage);
+      setIsPlaying(false);
+      
+      toast({
+        variant: "destructive",
+        title: "Error Loading Track",
+        description: errorMessage,
+      });
+    }
+  }, [track, isPlaying, toast]);
+
+  useEffect(() => {
     loadTrack();
-  }, [track, toast]);
+  }, [track, loadTrack]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -58,6 +71,11 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     return () => clearInterval(interval);
   }, []);
 
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    await loadTrack();
+  };
+
   const togglePlayPause = async () => {
     try {
       setError(null);
@@ -69,7 +87,12 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       setIsPlaying(!isPlaying);
     } catch (err) {
       const audioError = err as AudioError;
-      const errorMessage = `Playback error: ${audioError.message}`;
+      let errorMessage = `Playback error: ${audioError.message}`;
+      
+      if (audioError.code === 'CORS_ERROR') {
+        errorMessage = 'Unable to play audio due to cross-origin restrictions. Please try again.';
+      }
+      
       console.error(errorMessage, audioError);
       setError(errorMessage);
       setIsPlaying(false);
@@ -125,7 +148,19 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="ml-2"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRetrying ? 'animate-spin' : ''}`} />
+              {isRetrying ? 'Retrying...' : 'Retry'}
+            </Button>
+          </AlertDescription>
         </Alert>
       )}
       
