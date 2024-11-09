@@ -18,17 +18,19 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
     firstTrackAlbum: tracks[0]?.album,
     tracksWithAlbum: tracks.slice(0, 3).map(t => ({
       key: t.key,
-      album: t.album
+      album: t.album || 'Unknown'
     }))
   });
 
   // Filter tracks by selected album if one is selected
   const filteredTracks = selectedAlbum
     ? tracks.filter(track => {
-        const matches = track.album.trim() === selectedAlbum.name.trim();
+        const trackAlbum = track.album || '';
+        const selectedAlbumName = selectedAlbum.name || '';
+        const matches = trackAlbum.trim() === selectedAlbumName.trim();
         console.debug('[TrackList] Track match:', {
-          trackAlbum: track.album,
-          selectedAlbum: selectedAlbum.name,
+          trackAlbum: track.album || 'Unknown',
+          selectedAlbum: selectedAlbum?.name || 'Unknown',
           matches
         });
         return matches;
@@ -38,17 +40,17 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
   // Debug log after filtering
   console.debug('[TrackList] After filtering:', {
     filteredCount: filteredTracks.length,
-    selectedAlbum: selectedAlbum?.name,
+    selectedAlbum: selectedAlbum?.name || 'Unknown',
     sampleTracks: filteredTracks.slice(0, 3).map(t => t.fileName)
   });
 
   // Group tracks by album if no specific album is selected
   const tracksByAlbum = filteredTracks.reduce((acc, track) => {
     if (!selectedAlbum) {
-      if (!acc[track.album]) {
-        acc[track.album] = [];
+      if (!acc[track.album || 'Unknown']) {
+        acc[track.album || 'Unknown'] = [];
       }
-      acc[track.album].push(track);
+      acc[track.album || 'Unknown'].push(track);
     } else {
       // If an album is selected, use a single group
       if (!acc['tracks']) {
