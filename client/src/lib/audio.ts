@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 export class AudioError extends Error {
   constructor(message: string, public code: string, public originalError?: Error) {
     super(message);
@@ -13,12 +15,15 @@ export class AudioController {
   private debugMode: boolean = false;
   private maxRetries: number = 3;
   private retryDelay: number = 1000; // 1 second
+  private isConnected: boolean = false;
 
   constructor() {
     this.audio = new Audio();
     this.context = null;
-    this.setupAudioContext();
+    this.setupEventListeners();
+  }
 
+  private setupEventListeners() {
     // Add error event listeners
     this.audio.addEventListener('error', this.handleError);
     this.audio.addEventListener('stalled', () => this.logDebug('Audio playback stalled'));
@@ -30,11 +35,20 @@ export class AudioController {
     this.audio.crossOrigin = 'anonymous';
   }
 
-  private setupAudioContext() {
+  private async setupAudioContext() {
     try {
+      await this.cleanupAudioContext();
+      
       this.context = new AudioContext();
       this.gainNode = this.context.createGain();
       this.gainNode.connect(this.context.destination);
+      
+      // Create new source and connect it
+      this.source = this.context.createMediaElementSource(this.audio);
+      this.source.connect(this.gainNode);
+      this.isConnected = true;
+      
+      this.logDebug('Audio context and connections setup successfully');
     } catch (error) {
       this.logDebug(`Error setting up AudioContext: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new AudioError(
@@ -53,7 +67,6 @@ export class AudioController {
       errorMessage = event.message;
       errorCode = 'MEDIA_ERROR';
       
-      // Check for CORS-related errors
       if (event.message.includes('CORS') || event.message.includes('cross-origin')) {
         errorCode = 'CORS_ERROR';
         errorMessage = 'Cross-origin access denied. Please check CORS configuration.';
@@ -110,7 +123,7 @@ export class AudioController {
 
   private async cleanupAudioContext() {
     try {
-      if (this.source) {
+      if (this.source && this.isConnected) {
         this.source.disconnect();
         this.source = null;
       }
@@ -118,11 +131,16 @@ export class AudioController {
         this.gainNode.disconnect();
       }
       if (this.context) {
-        await this.context.close();
+        if (this.context.state !== 'closed') {
+          await this.context.close();
+        }
         this.context = null;
       }
+      this.isConnected = false;
+      this.logDebug('Audio context and connections cleaned up successfully');
     } catch (error) {
       this.logDebug(`Error cleaning up audio context: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Don't throw here, just log the error
     }
   }
 
@@ -131,23 +149,24 @@ export class AudioController {
       try {
         this.logDebug(`Loading audio from URL: ${url}`);
         
-        // Clean up previous audio context and create a new one
-        await this.cleanupAudioContext();
-        this.setupAudioContext();
+        // Reset audio element
+        this.audio.pause();
+        this.audio.src = '';
+        
+        // Setup fresh audio context and connections
+        await this.setupAudioContext();
         
         if (!this.context || !this.gainNode) {
           throw new AudioError('Audio context not initialized', 'CONTEXT_ERROR');
         }
         
+        // Set new source
         this.audio.src = url;
         
         if (this.context.state === 'suspended') {
           this.logDebug('Resuming audio context');
           await this.context.resume();
         }
-        
-        this.source = this.context.createMediaElementSource(this.audio);
-        this.source.connect(this.gainNode);
         
         this.logDebug('Initiating audio load');
         await this.audio.load();
@@ -181,6 +200,11 @@ export class AudioController {
         if (this.context?.state === 'suspended') {
           await this.context.resume();
         }
+        
+        if (!this.isConnected) {
+          await this.setupAudioContext();
+        }
+        
         const playPromise = this.audio.play();
         
         if (playPromise !== undefined) {
@@ -261,6 +285,7 @@ export class AudioController {
       networkState: this.audio.networkState,
       error: this.audio.error,
       contextState: this.context?.state,
+      isConnected: this.isConnected
     };
   }
 
