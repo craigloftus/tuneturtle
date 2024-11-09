@@ -47,18 +47,11 @@ export function Home() {
       const album = parts.length > 1 ? parts[0] : 'Unknown Album';
       const fileName = parts[parts.length - 1].replace(/\.[^/.]+$/, ''); // Remove file extension
       
-      // Debug log for track processing
-      console.debug('[Track Processing]', {
-        key: track.key,
-        album,
-        fileName,
-        parts
-      });
-      
-      const processedTrack = {
+      // Create processed track with correct album property
+      const processedTrack: Track = {
         ...track,
-        album,
-        fileName
+        album: album,  // Make sure album is explicitly set
+        fileName: fileName
       };
       
       if (!albumMap.has(album)) {
@@ -67,19 +60,10 @@ export function Home() {
       albumMap.get(album)!.push(processedTrack);
     });
     
-    // Debug log for album structure
-    console.debug('[Albums Structure]', 
-      Array.from(albumMap.entries()).map(([name, tracks]) => ({
-        name,
-        trackCount: tracks.length,
-        sampleTrack: tracks[0]?.fileName
-      }))
-    );
-    
     return Array.from(albumMap.entries()).map(([name, tracks]) => ({
       name,
       tracks,
-      coverUrl: undefined // TODO: Add cover art support
+      coverUrl: undefined
     }));
   }, [tracks]);
 
@@ -141,22 +125,6 @@ export function Home() {
     );
   }
 
-  const currentIndex = currentTrack 
-    ? tracks.findIndex(t => t.key === currentTrack.key)
-    : -1;
-
-  const handleNext = () => {
-    if (currentIndex < tracks.length - 1) {
-      setCurrentTrack(tracks[currentIndex + 1]);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      setCurrentTrack(tracks[currentIndex - 1]);
-    }
-  };
-
   const handleAlbumSelect = (album: Album) => {
     console.debug('[Album Selected]', {
       name: album.name,
@@ -173,6 +141,22 @@ export function Home() {
   const handleBackToGrid = () => {
     setViewMode('grid');
     setSelectedAlbum(null);
+  };
+
+  const currentIndex = currentTrack 
+    ? tracks.findIndex(t => t.key === currentTrack.key)
+    : -1;
+
+  const handleNext = () => {
+    if (currentIndex < tracks.length - 1) {
+      setCurrentTrack(tracks[currentIndex + 1]);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentTrack(tracks[currentIndex - 1]);
+    }
   };
 
   return (
