@@ -11,16 +11,35 @@ interface TrackListProps {
 }
 
 export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: TrackListProps) {
+  // Debug log before filtering
+  console.debug('[TrackList] Before filtering:', {
+    totalTracks: tracks.length,
+    selectedAlbumName: selectedAlbum?.name,
+    firstTrackAlbum: tracks[0]?.album,
+    tracksWithAlbum: tracks.slice(0, 3).map(t => ({
+      key: t.key,
+      album: t.album
+    }))
+  });
+
   // Filter tracks by selected album if one is selected
   const filteredTracks = selectedAlbum
-    ? tracks.filter(track => track.album === selectedAlbum.name)
+    ? tracks.filter(track => {
+        const matches = track.album.trim() === selectedAlbum.name.trim();
+        console.debug('[TrackList] Track match:', {
+          trackAlbum: track.album,
+          selectedAlbum: selectedAlbum.name,
+          matches
+        });
+        return matches;
+      })
     : tracks;
 
-  // Debug log for filtered tracks
-  console.debug('[TrackList] Filtered Tracks:', {
-    albumName: selectedAlbum?.name,
-    trackCount: filteredTracks.length,
-    sampleTrack: filteredTracks[0]
+  // Debug log after filtering
+  console.debug('[TrackList] After filtering:', {
+    filteredCount: filteredTracks.length,
+    selectedAlbum: selectedAlbum?.name,
+    sampleTracks: filteredTracks.slice(0, 3).map(t => t.fileName)
   });
 
   // Group tracks by album if no specific album is selected
