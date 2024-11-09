@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { S3Setup } from "@/components/S3Setup";
-import { validateS3Credentials } from "@/lib/aws";
+import { validateS3Credentials, checkStoredCredentials } from "@/lib/aws";
 import { useToast } from "@/hooks/use-toast";
 import type { S3Credentials } from "@/types/aws";
 
@@ -9,6 +9,25 @@ export function Setup() {
   const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Check for stored credentials on component mount
+    const storedCredentials = checkStoredCredentials();
+    if (storedCredentials) {
+      validateS3Credentials(storedCredentials)
+        .then(() => {
+          toast({
+            title: "Success",
+            description: "Reconnected to S3 using stored credentials",
+          });
+          navigate("/");
+        })
+        .catch(() => {
+          // Invalid stored credentials, continue with setup
+          console.warn("Stored credentials are invalid");
+        });
+    }
+  }, [navigate, toast]);
 
   const handleSubmit = async (data: S3Credentials) => {
     setIsLoading(true);
