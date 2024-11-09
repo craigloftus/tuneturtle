@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-
+// This file is kept for maintaining types and interfaces
 export class AudioError extends Error {
   constructor(message: string, public code: string, public originalError?: Error) {
     super(message);
@@ -7,343 +6,51 @@ export class AudioError extends Error {
   }
 }
 
+// Minimal type definitions to maintain interface compatibility
+export interface AudioState {
+  currentTime: number;
+  duration: number;
+  volume: number;
+  paused: boolean;
+  ended: boolean;
+  readyState: number;
+  networkState: number;
+  error: MediaError | null;
+}
+
+// Basic audio controller interface to ensure type consistency
 export class AudioController {
   private audio: HTMLAudioElement;
-  private context: AudioContext | null;
-  private source: MediaElementAudioSourceNode | null = null;
-  private gainNode: GainNode | null = null;
-  private debugMode: boolean = false;
-  private maxRetries: number = 3;
-  private retryDelay: number = 1000; // 1 second
-  private isConnected: boolean = false;
-  private supportedFormats = ['audio/mpeg'];
 
   constructor() {
     this.audio = new Audio();
-    this.context = null;
-    this.setupEventListeners();
   }
 
-  private setupEventListeners() {
-    // Add error event listeners
-    this.audio.addEventListener('error', this.handleError);
-    this.audio.addEventListener('stalled', () => this.logDebug('Audio playback stalled'));
-    this.audio.addEventListener('waiting', () => this.logDebug('Audio buffering'));
-    this.audio.addEventListener('suspend', () => this.logDebug('Audio context suspended'));
-    this.audio.addEventListener('ended', () => this.logDebug('Audio playback ended'));
-    
-    // Add CORS-specific event listeners
-    this.audio.crossOrigin = 'anonymous';
+  async load(url: string): Promise<void> {
+    this.audio.src = url;
+    return Promise.resolve();
   }
 
-  private validateAudioFormat(url: string, contentType?: string): boolean {
-    // Check content type if provided
-    if (contentType && !this.supportedFormats.includes(contentType)) {
-      throw new AudioError(
-        `Unsupported audio format: ${contentType}. Only MP3 format is supported.`,
-        'FORMAT_ERROR'
-      );
-    }
-
-    // Check file extension
-    const fileExtension = url.split('.').pop()?.toLowerCase();
-    if (!fileExtension || !['mp3'].includes(fileExtension)) {
-      throw new AudioError(
-        'Unsupported file format. Only MP3 files are supported.',
-        'FORMAT_ERROR'
-      );
-    }
-
-    return true;
+  async play(): Promise<void> {
+    return this.audio.play();
   }
 
-  private async setupAudioContext() {
-    try {
-      // Clean up existing context and connections first
-      await this.cleanupAudioContext();
-      
-      // Create new context
-      this.context = new AudioContext();
-      this.gainNode = this.context.createGain();
-      this.gainNode.connect(this.context.destination);
-
-      // Wait for any previous operations to complete
-      await new Promise(resolve => setTimeout(resolve, 0));
-      
-      // Create new source and connect it
-      this.source = this.context.createMediaElementSource(this.audio);
-      this.source.connect(this.gainNode);
-      this.isConnected = true;
-      
-      this.logDebug('Audio context and connections setup successfully');
-    } catch (error) {
-      this.logDebug(`Error setting up AudioContext: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new AudioError(
-        'Failed to initialize audio system',
-        'INIT_ERROR',
-        error instanceof Error ? error : undefined
-      );
-    }
+  pause(): void {
+    this.audio.pause();
   }
 
-  private handleError = (event: ErrorEvent | MediaError | Event) => {
-    let errorMessage = 'Unknown audio error occurred';
-    let errorCode = 'UNKNOWN_ERROR';
-
-    if (event instanceof ErrorEvent) {
-      errorMessage = event.message;
-      errorCode = 'MEDIA_ERROR';
-      
-      if (event.message.includes('CORS') || event.message.includes('cross-origin')) {
-        errorCode = 'CORS_ERROR';
-        errorMessage = 'Cross-origin access denied. Please check CORS configuration.';
-      }
-    } else if (event instanceof Event && this.audio.error) {
-      const mediaError = this.audio.error;
-      switch (mediaError.code) {
-        case MediaError.MEDIA_ERR_ABORTED:
-          errorMessage = 'Audio playback aborted';
-          errorCode = 'PLAYBACK_ABORTED';
-          break;
-        case MediaError.MEDIA_ERR_NETWORK:
-          errorMessage = 'Network error occurred while loading audio';
-          errorCode = 'NETWORK_ERROR';
-          break;
-        case MediaError.MEDIA_ERR_DECODE:
-          errorMessage = 'Audio decoding failed - file may be corrupted or unsupported';
-          errorCode = 'DECODE_ERROR';
-          break;
-        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMessage = 'Audio format not supported by your browser';
-          errorCode = 'FORMAT_ERROR';
-          break;
-      }
-    }
-
-    this.logDebug(`Audio Error: ${errorMessage} (${errorCode})`);
-    throw new AudioError(errorMessage, errorCode);
-  };
-
-  enableDebug(enable: boolean = true) {
-    this.debugMode = enable;
-    this.logDebug(`Debug mode ${enable ? 'enabled' : 'disabled'}`);
-  }
-
-  private logDebug(message: string) {
-    if (this.debugMode) {
-      console.debug(`[AudioPlayer Debug] ${message}`);
-    }
-  }
-
-  private async retry<T>(operation: () => Promise<T>, retries: number = this.maxRetries): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      if (retries > 0 && !(error instanceof AudioError && error.code === 'FORMAT_ERROR')) {
-        this.logDebug(`Retrying operation. Attempts remaining: ${retries}`);
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-        return this.retry(operation, retries - 1);
-      }
-      throw error;
-    }
-  }
-
-  private async cleanupAudioContext() {
-    try {
-      if (this.source && this.isConnected) {
-        this.source.disconnect();
-        this.source = null;
-      }
-      if (this.gainNode) {
-        this.gainNode.disconnect();
-      }
-      if (this.context) {
-        if (this.context.state !== 'closed') {
-          await this.context.close();
-        }
-        this.context = null;
-      }
-      this.isConnected = false;
-      this.logDebug('Audio context and connections cleaned up successfully');
-    } catch (error) {
-      this.logDebug(`Error cleaning up audio context: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      // Don't throw here, just log the error
-    }
-  }
-
-  async load(url: string, contentType?: string) {
-    return this.retry(async () => {
-      try {
-        this.logDebug(`Loading audio from URL: ${url}`);
-        
-        // Validate format before attempting to load
-        this.validateAudioFormat(url, contentType);
-        
-        // Reset audio element
-        this.audio.pause();
-        this.audio.src = '';
-        await this.audio.load();
-        
-        // Setup fresh audio context and connections
-        await this.setupAudioContext();
-        
-        if (!this.context || !this.gainNode) {
-          throw new AudioError('Audio context not initialized', 'CONTEXT_ERROR');
-        }
-        
-        // Set new source
-        this.audio.src = url;
-        
-        if (this.context.state === 'suspended') {
-          this.logDebug('Resuming audio context');
-          await this.context.resume();
-        }
-        
-        this.logDebug('Initiating audio load');
-        await this.audio.load();
-        this.logDebug('Audio loaded successfully');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        this.logDebug(`Error loading audio: ${message}`);
-        
-        // Pass through format errors without wrapping
-        if (error instanceof AudioError && error.code === 'FORMAT_ERROR') {
-          throw error;
-        }
-        
-        // Check for CORS-specific errors
-        if (message.includes('CORS') || message.includes('cross-origin')) {
-          throw new AudioError(
-            'Cross-origin access denied. Please check CORS configuration.',
-            'CORS_ERROR',
-            error instanceof Error ? error : undefined
-          );
-        }
-        
-        throw new AudioError(
-          'Failed to load audio',
-          'LOAD_ERROR',
-          error instanceof Error ? error : undefined
-        );
-      }
-    });
-  }
-
-  async play() {
-    return this.retry(async () => {
-      try {
-        this.logDebug('Attempting to play audio');
-        if (this.context?.state === 'suspended') {
-          await this.context.resume();
-        }
-        
-        if (!this.isConnected) {
-          await this.setupAudioContext();
-        }
-        
-        const playPromise = this.audio.play();
-        
-        if (playPromise !== undefined) {
-          await playPromise;
-          this.logDebug('Audio playing');
-        }
-      } catch (error) {
-        this.logDebug(`Error playing audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        throw new AudioError(
-          'Failed to play audio',
-          'PLAY_ERROR',
-          error instanceof Error ? error : undefined
-        );
-      }
-    });
-  }
-
-  pause() {
-    try {
-      this.logDebug('Pausing audio');
-      this.audio.pause();
-    } catch (error) {
-      this.logDebug(`Error pausing audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new AudioError(
-        'Failed to pause audio',
-        'PAUSE_ERROR',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  setVolume(value: number) {
-    try {
-      this.logDebug(`Setting volume to: ${value}`);
-      if (this.gainNode) {
-        this.gainNode.gain.value = value;
-      }
-    } catch (error) {
-      this.logDebug(`Error setting volume: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new AudioError(
-        'Failed to set volume',
-        'VOLUME_ERROR',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  getCurrentTime() {
-    return this.audio.currentTime;
-  }
-
-  getDuration() {
-    return this.audio.duration;
-  }
-
-  seek(time: number) {
-    try {
-      this.logDebug(`Seeking to time: ${time}`);
-      this.audio.currentTime = time;
-    } catch (error) {
-      this.logDebug(`Error seeking: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new AudioError(
-        'Failed to seek',
-        'SEEK_ERROR',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  getState() {
+  getState(): AudioState {
     return {
-      currentTime: this.getCurrentTime(),
-      duration: this.getDuration(),
-      volume: this.gainNode?.gain.value ?? 0,
+      currentTime: this.audio.currentTime,
+      duration: this.audio.duration,
+      volume: this.audio.volume,
       paused: this.audio.paused,
       ended: this.audio.ended,
       readyState: this.audio.readyState,
       networkState: this.audio.networkState,
-      error: this.audio.error,
-      contextState: this.context?.state,
-      isConnected: this.isConnected
+      error: this.audio.error
     };
-  }
-
-  async dispose() {
-    try {
-      this.logDebug('Disposing audio controller');
-      this.audio.removeEventListener('error', this.handleError);
-      await this.cleanupAudioContext();
-    } catch (error) {
-      this.logDebug(`Error disposing audio controller: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new AudioError(
-        'Failed to dispose audio controller',
-        'DISPOSE_ERROR',
-        error instanceof Error ? error : undefined
-      );
-    }
   }
 }
 
 export const audioController = new AudioController();
-
-// Enable debug mode in development
-if (process.env.NODE_ENV === 'development') {
-  audioController.enableDebug(true);
-}

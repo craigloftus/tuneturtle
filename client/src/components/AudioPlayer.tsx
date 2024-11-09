@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Play, Pause, SkipForward, SkipBack, Volume2, AlertCircle, RefreshCw } from "lucide-react";
-import { audioController, AudioError } from '@/lib/audio';
 import { Track } from '@/types/aws';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +14,7 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -23,77 +23,76 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const [isRetrying, setIsRetrying] = useState(false);
   const { toast } = useToast();
 
-  const loadTrack = useCallback(async (retryAttempt: number = 0) => {
-    if (!track) return;
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !track) return;
 
-    try {
-      setError(null);
-      setIsRetrying(false);
-      await audioController.load(track.url);
-      setDuration(audioController.getDuration());
-      if (isPlaying) {
-        await audioController.play();
-      }
-    } catch (err) {
-      const audioError = err as AudioError;
-      let errorMessage = `Failed to load track: ${audioError.message}`;
-      
-      // Handle CORS errors specifically
-      if (audioError.code === 'CORS_ERROR') {
-        errorMessage = 'Unable to access audio file due to cross-origin restrictions. Please try again or contact support.';
-      }
-      
-      console.error(errorMessage, audioError);
+    const handleError = () => {
+      const errorMessage = 'Unable to access or play audio file. Please try again.';
       setError(errorMessage);
       setIsPlaying(false);
-      
       toast({
         variant: "destructive",
         title: "Error Loading Track",
         description: errorMessage,
       });
-    }
-  }, [track, isPlaying, toast]);
+    };
 
-  useEffect(() => {
-    loadTrack();
-  }, [track, loadTrack]);
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      try {
-        setCurrentTime(audioController.getCurrentTime());
-      } catch (err) {
-        console.error('Error updating current time:', err);
-      }
-    }, 1000);
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
 
-    return () => clearInterval(interval);
-  }, []);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      if (onNext) onNext();
+    };
 
-  const handleRetry = async () => {
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+
+    audio.src = track.url;
+    audio.load();
+
+    return () => {
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [track, onNext, toast]);
+
+  const handleRetry = () => {
+    const audio = audioRef.current;
+    if (!audio || !track) return;
+
     setIsRetrying(true);
-    await loadTrack();
+    setError(null);
+    audio.src = track.url;
+    audio.load();
+    setIsRetrying(false);
   };
 
   const togglePlayPause = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
     try {
       setError(null);
       if (isPlaying) {
-        audioController.pause();
+        audio.pause();
       } else {
-        await audioController.play();
+        await audio.play();
       }
       setIsPlaying(!isPlaying);
     } catch (err) {
-      const audioError = err as AudioError;
-      let errorMessage = `Playback error: ${audioError.message}`;
-      
-      if (audioError.code === 'CORS_ERROR') {
-        errorMessage = 'Unable to play audio due to cross-origin restrictions. Please try again.';
-      }
-      
-      console.error(errorMessage, audioError);
+      const errorMessage = 'Unable to play audio. Please try again.';
+      console.error(errorMessage, err);
       setError(errorMessage);
       setIsPlaying(false);
       toast({
@@ -105,32 +104,36 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   };
 
   const handleSeek = (value: number[]) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
     try {
-      audioController.seek(value[0]);
+      audio.currentTime = value[0];
       setCurrentTime(value[0]);
     } catch (err) {
-      const audioError = err as AudioError;
-      console.error('Seek error:', audioError);
+      console.error('Seek error:', err);
       toast({
         variant: "destructive",
         title: "Seek Error",
-        description: audioError.message,
+        description: "Failed to seek in the audio track.",
       });
     }
   };
 
   const handleVolumeChange = (value: number[]) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
     try {
       const newVolume = value[0];
-      audioController.setVolume(newVolume);
+      audio.volume = newVolume;
       setVolume(newVolume);
     } catch (err) {
-      const audioError = err as AudioError;
-      console.error('Volume control error:', audioError);
+      console.error('Volume control error:', err);
       toast({
         variant: "destructive",
         title: "Volume Control Error",
-        description: audioError.message,
+        description: "Failed to change volume.",
       });
     }
   };
@@ -145,6 +148,8 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
   return (
     <Card className="p-4 fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t">
+      <audio ref={audioRef} preload="metadata" />
+      
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
