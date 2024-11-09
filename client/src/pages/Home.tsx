@@ -1,17 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import useSWR from "swr";
-import { Track } from "@/types/aws";
+import { Track, Album, ViewMode } from "@/types/aws";
 import { TrackList } from "@/components/TrackList";
+import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2 } from "lucide-react";
+import { Loader2, Grid, List } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AnimatePresence, motion } from "framer-motion";
 
 export function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isTimeout, setIsTimeout] = useState(false);
 
   const { data: tracks, error, isLoading } = useSWR<Track[]>("/api/aws/list", {
@@ -29,6 +33,41 @@ export function Home() {
     },
     revalidateOnFocus: false,
   });
+
+  // Process tracks into albums
+  const albums = useMemo(() => {
+    if (!tracks) return [];
+    
+    const albumMap = new Map<string, Track[]>();
+    
+    tracks.forEach(track => {
+      const parts = track.key.split('/');
+      const album = parts.length > 1 ? parts[0] : 'Unknown Album';
+      const fileName = parts[parts.length - 1];
+      
+      const processedTrack = {
+        ...track,
+        album,
+        fileName
+      };
+      
+      if (!albumMap.has(album)) {
+        albumMap.set(album, []);
+      }
+      albumMap.get(album)!.push(processedTrack);
+    });
+    
+    return Array.from(albumMap.entries()).map(([name, tracks]) => ({
+      name,
+      tracks,
+      coverUrl: undefined // TODO: Add cover art support
+    }));
+  }, [tracks]);
+
+  const currentAlbum = useMemo(() => {
+    if (!currentTrack || !albums) return null;
+    return albums.find(album => album.name === currentTrack.album) || null;
+  }, [currentTrack, albums]);
 
   // Set up loading timeout
   useEffect(() => {
@@ -99,15 +138,57 @@ export function Home() {
     }
   };
 
+  const handleAlbumSelect = (album: Album) => {
+    if (album.tracks.length > 0) {
+      setCurrentTrack(album.tracks[0]);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 pb-32">
-      <h1 className="text-3xl font-bold mb-8">Music Player</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Music Player</h1>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="icon"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
       
-      <TrackList
-        tracks={tracks}
-        onSelect={setCurrentTrack}
-        currentTrack={currentTrack}
-      />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={viewMode}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.2 }}
+        >
+          {viewMode === 'grid' ? (
+            <AlbumGrid
+              albums={albums}
+              onTrackSelect={handleAlbumSelect}
+              currentAlbum={currentAlbum}
+            />
+          ) : (
+            <TrackList
+              tracks={tracks}
+              onSelect={setCurrentTrack}
+              currentTrack={currentTrack}
+            />
+          )}
+        </motion.div>
+      </AnimatePresence>
       
       <AudioPlayer
         track={currentTrack}
