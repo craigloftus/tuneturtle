@@ -42,15 +42,25 @@ export function Home() {
     const albumMap = new Map<string, Track[]>();
     
     tracks.forEach(track => {
-      const parts = track.key.split('/');
-      // Extract album name and filename
-      const album = parts.length > 1 ? parts[0] : 'Unknown Album';
-      const fileName = parts[parts.length - 1].replace(/\.[^/.]+$/, ''); // Remove file extension
+      // Extract album name and filename from S3 key
+      const keyParts = track.key.split('/');
+      let album: string;
+      let fileName: string;
+      
+      if (keyParts.length > 1) {
+        // If the key contains folders (e.g., "Album Name/track.mp3")
+        album = keyParts.slice(0, -1).join('/'); // Take all parts except the last one
+        fileName = keyParts[keyParts.length - 1].replace(/\.[^/.]+$/, ''); // Remove file extension
+      } else {
+        // If the key is just a file (e.g., "track.mp3")
+        album = 'Unknown Album';
+        fileName = keyParts[0].replace(/\.[^/.]+$/, '');
+      }
       
       // Create processed track with correct album property
       const processedTrack: Track = {
         ...track,
-        album: album,  // Make sure album is explicitly set
+        album: album,
         fileName: fileName
       };
       
