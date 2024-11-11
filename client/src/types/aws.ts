@@ -5,12 +5,19 @@ export interface S3Credentials {
   bucket: string;
 }
 
+export interface MetadataProgress {
+  progress: number;  // Progress percentage (0-100)
+  stage: 'initializing' | 'reading' | 'parsing' | 'complete';
+  fileName: string;
+}
+
 export interface TrackMetadata {
   title: string;
   artist: string;
   duration: number;
   bitrate: number;
   mimeType: string;
+  extractionProgress?: MetadataProgress;
 }
 
 export interface Track {
