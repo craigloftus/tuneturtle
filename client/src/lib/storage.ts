@@ -9,13 +9,15 @@ interface TracksCache {
   timestamp: number;
   nextContinuationToken?: string;
   isTruncated: boolean;
+  totalFound: number;
+  lastPage: number;
 }
 
 export function saveAwsCredentials(credentials: S3Credentials): void {
   try {
     localStorage.setItem(AWS_CREDENTIALS_KEY, JSON.stringify(credentials));
   } catch (error) {
-    console.error('Failed to save AWS credentials to localStorage:', error);
+    console.error('[Storage] Failed to save AWS credentials to localStorage:', error);
   }
 }
 
@@ -24,7 +26,7 @@ export function getAwsCredentials(): S3Credentials | null {
     const stored = localStorage.getItem(AWS_CREDENTIALS_KEY);
     return stored ? JSON.parse(stored) : null;
   } catch (error) {
-    console.error('Failed to retrieve AWS credentials from localStorage:', error);
+    console.error('[Storage] Failed to retrieve AWS credentials from localStorage:', error);
     return null;
   }
 }
@@ -34,21 +36,36 @@ export function clearAwsCredentials(): void {
     localStorage.removeItem(AWS_CREDENTIALS_KEY);
     clearTracksCache();
   } catch (error) {
-    console.error('Failed to clear AWS credentials from localStorage:', error);
+    console.error('[Storage] Failed to clear AWS credentials from localStorage:', error);
   }
 }
 
-export function saveTracksToCache(tracks: Track[], nextContinuationToken?: string, isTruncated: boolean = false): void {
+export function saveTracksToCache(
+  tracks: Track[], 
+  nextContinuationToken?: string, 
+  isTruncated: boolean = false,
+  totalFound: number = 0,
+  lastPage: number = 1
+): void {
   try {
     const cacheData: TracksCache = {
       tracks,
       timestamp: Date.now(),
       nextContinuationToken,
-      isTruncated
+      isTruncated,
+      totalFound,
+      lastPage
     };
+    console.log('[Storage] Saving tracks to cache:', {
+      trackCount: tracks.length,
+      nextToken: nextContinuationToken,
+      isTruncated,
+      totalFound,
+      lastPage
+    });
     localStorage.setItem(TRACKS_CACHE_KEY, JSON.stringify(cacheData));
   } catch (error) {
-    console.error('Failed to save tracks to cache:', error);
+    console.error('[Storage] Failed to save tracks to cache:', error);
   }
 }
 
@@ -60,15 +77,22 @@ export function getTracksFromCache(): TracksCache | null {
     const cacheData: TracksCache = JSON.parse(cached);
     const now = Date.now();
 
-    // Check if cache is expired
     if (now - cacheData.timestamp > CACHE_EXPIRY_TIME) {
+      console.log('[Storage] Cache expired, clearing...');
       clearTracksCache();
       return null;
     }
 
+    console.log('[Storage] Retrieved tracks from cache:', {
+      trackCount: cacheData.tracks.length,
+      nextToken: cacheData.nextContinuationToken,
+      isTruncated: cacheData.isTruncated,
+      totalFound: cacheData.totalFound,
+      lastPage: cacheData.lastPage
+    });
     return cacheData;
   } catch (error) {
-    console.error('Failed to retrieve tracks from cache:', error);
+    console.error('[Storage] Failed to retrieve tracks from cache:', error);
     return null;
   }
 }
@@ -77,8 +101,58 @@ export function clearTracksCache(): void {
   try {
     localStorage.removeItem(TRACKS_CACHE_KEY);
   } catch (error) {
-    console.error('Failed to clear tracks cache:', error);
+    console.error('[Storage] Failed to clear tracks cache:', error);
   }
+}
+
+export function updateTracksCache(
+  newTracks: Track[], 
+  nextContinuationToken?: string, 
+  isTruncated: boolean = false,
+  totalFound: number = 0
+): void {
+  const existingCache = getTracksFromCache();
+  let updatedTracks: Track[];
+  let lastPage = 1;
+
+  if (existingCache) {
+    // Merge new tracks with existing ones, avoiding duplicates
+    const uniqueTracks = new Map<string, Track>();
+    
+    // First add existing tracks to the map
+    existingCache.tracks.forEach(track => {
+      uniqueTracks.set(track.key, track);
+    });
+
+    // Then add/update with new tracks
+    newTracks.forEach(track => {
+      uniqueTracks.set(track.key, track);
+    });
+
+    updatedTracks = Array.from(uniqueTracks.values());
+    lastPage = existingCache.lastPage + 1;
+
+    console.log('[Storage] Updated tracks cache:', {
+      previousCount: existingCache.tracks.length,
+      newCount: newTracks.length,
+      totalCount: updatedTracks.length,
+      lastPage
+    });
+  } else {
+    updatedTracks = newTracks;
+    console.log('[Storage] Created new tracks cache:', {
+      trackCount: newTracks.length,
+      lastPage
+    });
+  }
+
+  saveTracksToCache(
+    updatedTracks,
+    nextContinuationToken,
+    isTruncated,
+    totalFound || updatedTracks.length,
+    lastPage
+  );
 }
 
 // Album-specific cache functions
@@ -86,23 +160,4 @@ export function getCachedAlbumTracks(albumName: string): Track[] {
   const cache = getTracksFromCache();
   if (!cache) return [];
   return cache.tracks.filter(track => track.album === albumName);
-}
-
-export function updateTracksCache(newTracks: Track[], nextContinuationToken?: string, isTruncated: boolean = false): void {
-  const existingCache = getTracksFromCache();
-  if (existingCache) {
-    // Merge new tracks with existing ones, avoiding duplicates
-    const uniqueTracks = [...existingCache.tracks];
-    newTracks.forEach(newTrack => {
-      const existingIndex = uniqueTracks.findIndex(t => t.key === newTrack.key);
-      if (existingIndex === -1) {
-        uniqueTracks.push(newTrack);
-      } else {
-        uniqueTracks[existingIndex] = newTrack;
-      }
-    });
-    saveTracksToCache(uniqueTracks, nextContinuationToken, isTruncated);
-  } else {
-    saveTracksToCache(newTracks, nextContinuationToken, isTruncated);
-  }
 }

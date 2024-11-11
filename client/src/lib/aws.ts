@@ -17,12 +17,12 @@ export async function validateS3Credentials(credentials: S3Credentials) {
   });
   
   if (!response.ok) {
-    throw new Error('Invalid AWS credentials');
+    const error = await response.json();
+    throw new Error(error.message || 'Invalid AWS credentials');
   }
   
   saveAwsCredentials(credentials);
-  // Clear existing cache when new credentials are validated
-  clearTracksCache();
+  clearTracksCache(); // Clear cache when new credentials are validated
   return response.json();
 }
 
@@ -31,19 +31,37 @@ interface ListResponse {
   nextContinuationToken?: string;
   isTruncated: boolean;
   totalFound: number;
+  maxKeys: number;
 }
 
-export async function listS3Objects(continuationToken?: string, limit: number = 100): Promise<ListResponse> {
-  // Check cache first if no continuation token is provided
-  if (!continuationToken) {
+interface PaginationOptions {
+  limit?: number;
+  continuationToken?: string;
+  useCache?: boolean;
+}
+
+export async function listS3Objects(options: PaginationOptions = {}): Promise<ListResponse> {
+  const { 
+    limit = 100,
+    continuationToken,
+    useCache = true 
+  } = options;
+
+  // Check cache first if no continuation token is provided and cache is enabled
+  if (!continuationToken && useCache) {
     const cachedData = getTracksFromCache();
     if (cachedData) {
-      console.log('[Cache] Using cached track data');
+      console.log('[AWS] Using cached track data:', {
+        trackCount: cachedData.tracks.length,
+        nextToken: cachedData.nextContinuationToken,
+        isTruncated: cachedData.isTruncated
+      });
       return {
         tracks: cachedData.tracks,
         nextContinuationToken: cachedData.nextContinuationToken,
         isTruncated: cachedData.isTruncated,
-        totalFound: cachedData.tracks.length
+        totalFound: cachedData.totalFound,
+        maxKeys: limit
       };
     }
   }
@@ -56,36 +74,81 @@ export async function listS3Objects(continuationToken?: string, limit: number = 
     params.append('continuationToken', continuationToken);
   }
 
-  const response = await fetch(`/api/aws/list?${params.toString()}`);
-  if (!response.ok) {
-    const error = await response.json();
-    if (error.error === "No credentials") {
-      clearTracksCache();
-    }
-    throw new Error('Failed to fetch tracks');
-  }
+  try {
+    console.log('[AWS] Fetching tracks:', {
+      limit,
+      continuationToken: continuationToken || 'none'
+    });
 
-  const data: ListResponse = await response.json();
-  
-  // Update cache with new data
-  updateTracksCache(data.tracks, data.nextContinuationToken, data.isTruncated);
-  
-  return data;
+    const response = await fetch(`/api/aws/list?${params.toString()}`);
+    if (!response.ok) {
+      const error = await response.json();
+      if (error.error === "No credentials") {
+        clearTracksCache();
+      }
+      throw new Error(error.message || 'Failed to fetch tracks');
+    }
+
+    const data: ListResponse = await response.json();
+    console.log('[AWS] Received track data:', {
+      trackCount: data.tracks.length,
+      nextToken: data.nextContinuationToken,
+      isTruncated: data.isTruncated,
+      totalFound: data.totalFound
+    });
+    
+    // Update cache with new data
+    updateTracksCache(
+      data.tracks, 
+      data.nextContinuationToken, 
+      data.isTruncated,
+      data.totalFound
+    );
+    
+    return data;
+  } catch (error) {
+    console.error('[AWS] Error fetching tracks:', error);
+    throw error;
+  }
 }
 
-export async function loadAllTracks(): Promise<Track[]> {
+export async function loadAllTracks(pageSize: number = 100): Promise<Track[]> {
+  console.log('[AWS] Starting to load all tracks');
   let allTracks: Track[] = [];
   let continuationToken: string | undefined;
   let isTruncated = true;
+  let page = 1;
 
-  while (isTruncated) {
-    const response = await listS3Objects(continuationToken);
-    allTracks = [...allTracks, ...response.tracks];
-    continuationToken = response.nextContinuationToken;
-    isTruncated = response.isTruncated;
+  try {
+    while (isTruncated) {
+      console.log('[AWS] Loading page', page, 'with token:', continuationToken || 'none');
+      const response = await listS3Objects({
+        limit: pageSize,
+        continuationToken,
+        useCache: page === 1 // Only use cache for first page
+      });
+
+      allTracks = [...allTracks, ...response.tracks];
+      continuationToken = response.nextContinuationToken;
+      isTruncated = response.isTruncated;
+      page++;
+
+      console.log('[AWS] Loaded page', page - 1, ':', {
+        newTracks: response.tracks.length,
+        totalTracks: allTracks.length,
+        hasMore: isTruncated
+      });
+    }
+
+    console.log('[AWS] Finished loading all tracks:', {
+      totalPages: page - 1,
+      totalTracks: allTracks.length
+    });
+    return allTracks;
+  } catch (error) {
+    console.error('[AWS] Error loading all tracks:', error);
+    throw error;
   }
-
-  return allTracks;
 }
 
 export function checkStoredCredentials(): S3Credentials | null {

@@ -38,6 +38,7 @@ const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
 
 async function validateBucketPermissions(s3: S3Client, bucket: string) {
   try {
+    console.log(`[Permission Check] Testing bucket permissions for: ${bucket}`);
     const listCommand = new ListObjectsV2Command({
       Bucket: bucket,
       MaxKeys: 1,
@@ -53,6 +54,7 @@ async function validateBucketPermissions(s3: S3Client, bucket: string) {
       await getSignedUrl(s3, getCommand, { expiresIn: 3600 });
     }
 
+    console.log(`[Permission Check] Successfully verified permissions for bucket: ${bucket}`);
     return true;
   } catch (error) {
     console.error("[Permission Check] Error:", error);
@@ -107,9 +109,10 @@ export function registerRoutes(app: Express) {
 
     const { bucket } = req.session.awsConfig;
     const continuationToken = req.query.continuationToken as string | undefined;
-    const limit = Number(req.query.limit) || 100;
+    const limit = Math.min(Number(req.query.limit) || 100, 1000); // Enforce reasonable limits
     
-    console.log(`[AWS List] Listing objects in bucket: ${bucket}, continuation token: ${continuationToken}`);
+    console.log(`[AWS List] Listing objects in bucket: ${bucket}`);
+    console.log(`[AWS List] Pagination params: limit=${limit}, continuationToken=${continuationToken || 'none'}`);
 
     try {
       if (!s3Client) {
@@ -131,13 +134,13 @@ export function registerRoutes(app: Express) {
 
       const response = await s3Client.send(command);
       console.log(`[AWS List] Found ${response.Contents?.length || 0} objects in bucket`);
+      console.log(`[AWS List] Pagination status: isTruncated=${response.IsTruncated}, nextToken=${response.NextContinuationToken || 'none'}`);
 
       const tracks = await Promise.all(
         (response.Contents || [])
           .filter(obj => obj.Key?.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i))
           .map(async obj => {
             const key = obj.Key!;
-            // Extract album and filename from the path
             const pathParts = key.split('/');
             const fileName = pathParts[pathParts.length - 1];
             const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
@@ -165,11 +168,14 @@ export function registerRoutes(app: Express) {
           })
       );
 
+      console.log(`[AWS List] Processed ${tracks.length} audio tracks`);
+
       res.json({
         tracks,
         nextContinuationToken: response.NextContinuationToken,
         isTruncated: response.IsTruncated,
-        totalFound: response.KeyCount
+        totalFound: response.KeyCount,
+        maxKeys: limit
       });
     } catch (error) {
       console.error("[AWS List] Error listing S3 objects:", error);
