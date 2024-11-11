@@ -5,19 +5,28 @@ export interface S3Credentials {
   bucket: string;
 }
 
+export interface TrackMetadata {
+  title: string;
+  artist: string;
+  duration: number;
+  bitrate: number;
+  mimeType: string;
+}
+
 export interface Track {
   key: string;
   size: number;
   lastModified: Date;
   url: string;
-  album: string;  // Extracted from the folder structure
-  fileName: string;  // The actual file name without the path
+  album: string;
+  fileName: string;
+  metadata?: TrackMetadata;
 }
 
 export interface Album {
   name: string;
   tracks: Track[];
-  coverUrl?: string;  // Optional cover art URL
+  coverUrl?: string;
 }
 
 export type ViewMode = 'list' | 'grid';

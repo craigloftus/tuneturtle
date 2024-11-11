@@ -10,8 +10,8 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.688.0",
-    "@aws-sdk/s3-request-presigner": "^3.688.0",
+    "@aws-sdk/client-s3": "^3.689.0",
+    "@aws-sdk/s3-request-presigner": "^3.689.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.1",
     "@radix-ui/react-alert-dialog": "^1.1.2",
@@ -54,6 +54,8 @@
     "input-otp": "^1.2.4",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
+    "music-metadata": "^10.6.0",
+    "music-metadata-browser": "^2.5.11",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.13.1",
