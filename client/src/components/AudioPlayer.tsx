@@ -27,8 +27,19 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     const audio = audioRef.current;
     if (!audio || !track) return;
 
-    const handleError = () => {
-      const errorMessage = 'Unable to access or play audio file. Please try again.';
+    const handleError = (e: ErrorEvent) => {
+      let errorMessage = 'Unable to access or play audio file.';
+      
+      // Handle format-specific errors
+      if (e.message.includes('MEDIA_ERR_SRC_NOT_SUPPORTED')) {
+        const format = track.fileName.split('.').pop()?.toUpperCase() || 'Unknown';
+        errorMessage = `This browser doesn't support ${format} format. Try converting to MP3.`;
+      } else if (e.message.includes('MEDIA_ERR_DECODE')) {
+        errorMessage = 'Audio file is corrupted or in an unsupported format.';
+      } else if (e.message.includes('MEDIA_ERR_NETWORK')) {
+        errorMessage = 'Network error while loading the audio file.';
+      }
+
       setError(errorMessage);
       setIsPlaying(false);
       toast({
@@ -44,6 +55,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
+      setError(null); // Clear any previous errors
     };
 
     const handleEnded = () => {
@@ -51,7 +63,20 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       if (onNext) onNext();
     };
 
-    audio.addEventListener('error', handleError);
+    // Add format-specific handling if needed
+    const fileExtension = track.fileName.split('.').pop()?.toLowerCase();
+    if (fileExtension) {
+      audio.type = {
+        mp3: 'audio/mpeg',
+        flac: 'audio/flac',
+        wav: 'audio/wav',
+        m4a: 'audio/mp4',
+        ogg: 'audio/ogg',
+        aac: 'audio/aac'
+      }[fileExtension] || 'audio/mpeg';
+    }
+
+    audio.addEventListener('error', handleError as EventListener);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
@@ -60,7 +85,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     audio.load();
 
     return () => {
-      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('error', handleError as EventListener);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);

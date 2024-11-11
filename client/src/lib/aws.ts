@@ -23,6 +23,16 @@ const METADATA_BYTE_RANGE = 5000;
 const SIGNED_URL_EXPIRY = 3600;
 const BATCH_SIZE = 5; // Number of concurrent metadata fetches
 
+// Define supported audio formats and their MIME types
+const SUPPORTED_FORMATS = {
+  mp3: 'audio/mpeg',
+  flac: 'audio/flac',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  aac: 'audio/aac'
+};
+
 interface ListResponse {
   tracks: Track[];
   nextContinuationToken?: string;
@@ -60,24 +70,28 @@ export async function validateS3Credentials(credentials: S3Credentials) {
   }
 }
 
-async function extractMetadata(audioBlob: Blob): Promise<TrackMetadata> {
+async function extractMetadata(audioBlob: Blob, fileName: string): Promise<TrackMetadata> {
   try {
     const metadata = await mm.parseBlob(audioBlob, { duration: true });
+    const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+    const mimeType = SUPPORTED_FORMATS[fileExtension as keyof typeof SUPPORTED_FORMATS] || 'audio/mpeg';
+
     return {
       title: metadata.common.title || '',
       artist: metadata.common.artist || 'Unknown Artist',
       duration: metadata.format.duration || 0,
       bitrate: metadata.format.bitrate || 0,
-      mimeType: metadata.format.mimeType || 'audio/mpeg'
+      mimeType
     };
   } catch (error) {
     console.warn('[AWS] Metadata extraction failed:', error);
+    const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
     return {
       title: '',
       artist: 'Unknown Artist',
       duration: 0,
       bitrate: 0,
-      mimeType: 'audio/mpeg'
+      mimeType: SUPPORTED_FORMATS[fileExtension as keyof typeof SUPPORTED_FORMATS] || 'audio/mpeg'
     };
   }
 }
@@ -108,7 +122,7 @@ export async function fetchTrackMetadata(
       throw new Error('Failed to read metadata blob');
     }
 
-    const metadata = await extractMetadata(new Blob([metadataBlob]));
+    const metadata = await extractMetadata(new Blob([metadataBlob]), key);
     saveMetadataToCache(key, metadata, response.ETag);
     
     return metadata;
@@ -127,12 +141,14 @@ async function createTrackFromS3Object(
   const pathParts = key.split('/');
   const fileName = pathParts[pathParts.length - 1];
   const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
+  const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+  const mimeType = SUPPORTED_FORMATS[fileExtension as keyof typeof SUPPORTED_FORMATS];
 
-  // Generate signed URL
+  // Generate signed URL with correct content type
   const fullTrackCommand = new GetObjectCommand({
     Bucket: bucket,
     Key: key,
-    ResponseContentType: 'audio/mpeg',
+    ResponseContentType: mimeType || 'audio/mpeg',
   });
   
   const url = await getSignedUrl(client, fullTrackCommand, {
@@ -202,9 +218,12 @@ export async function listS3Objects(options: {
 
     const response = await s3Client!.send(command);
     
-    // Filter audio files
+    // Filter audio files using the SUPPORTED_FORMATS keys
     const audioFiles = (response.Contents || [])
-      .filter(obj => obj.Key?.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i));
+      .filter(obj => {
+        const extension = obj.Key?.split('.').pop()?.toLowerCase();
+        return extension && Object.keys(SUPPORTED_FORMATS).includes(extension);
+      });
 
     // Create basic track objects
     const tracks = await Promise.all(
