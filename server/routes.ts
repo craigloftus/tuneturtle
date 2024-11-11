@@ -43,7 +43,6 @@ async function validateBucketPermissions(s3: S3Client, bucket: string) {
       Bucket: bucket,
       MaxKeys: 1,
     });
-    await s3.send(listCommand);
 
     const objects = await s3.send(listCommand);
     if (objects.Contents && objects.Contents.length > 0) {
@@ -87,6 +86,7 @@ export function registerRoutes(app: Express) {
       await validateBucketPermissions(s3Client, bucket);
       console.log(`[AWS Validate] Successfully validated credentials and permissions for bucket: ${bucket}`);
 
+      // @ts-ignore - Session extension
       req.session.awsConfig = { accessKeyId, secretAccessKey, region, bucket };
       
       res.json({ success: true });
@@ -102,26 +102,34 @@ export function registerRoutes(app: Express) {
   });
 
   app.get("/api/aws/list", async (req, res) => {
+    // @ts-ignore - Session extension
     if (!req.session.awsConfig) {
       console.warn("[AWS List] No credentials found in session");
       return res.status(401).json({ error: "No credentials" });
     }
 
+    // @ts-ignore - Session extension
     const { bucket } = req.session.awsConfig;
     const continuationToken = req.query.continuationToken as string | undefined;
     const limit = Math.min(Number(req.query.limit) || 100, 1000); // Enforce reasonable limits
     
-    console.log(`[AWS List] Listing objects in bucket: ${bucket}`);
-    console.log(`[AWS List] Pagination params: limit=${limit}, continuationToken=${continuationToken || 'none'}`);
+    console.log('[AWS List] Starting object listing:', {
+      bucket,
+      limit,
+      continuationToken: continuationToken || 'none'
+    });
 
     try {
       if (!s3Client) {
         console.log("[AWS List] Initializing S3 client with session credentials");
         s3Client = new S3Client({
           credentials: {
+            // @ts-ignore - Session extension
             accessKeyId: req.session.awsConfig.accessKeyId,
+            // @ts-ignore - Session extension
             secretAccessKey: req.session.awsConfig.secretAccessKey,
           },
+          // @ts-ignore - Session extension
           region: req.session.awsConfig.region,
         });
       }
@@ -132,43 +140,63 @@ export function registerRoutes(app: Express) {
         ContinuationToken: continuationToken,
       });
 
+      console.log('[AWS List] Sending ListObjectsV2Command:', {
+        bucket,
+        maxKeys: limit,
+        continuationToken: continuationToken || 'none'
+      });
+
       const response = await s3Client.send(command);
-      console.log(`[AWS List] Found ${response.Contents?.length || 0} objects in bucket`);
-      console.log(`[AWS List] Pagination status: isTruncated=${response.IsTruncated}, nextToken=${response.NextContinuationToken || 'none'}`);
+      
+      console.log('[AWS List] Received S3 response:', {
+        objectCount: response.Contents?.length || 0,
+        isTruncated: response.IsTruncated,
+        nextToken: response.NextContinuationToken || 'none'
+      });
+
+      // Filter and process audio files
+      const audioFiles = (response.Contents || [])
+        .filter(obj => obj.Key?.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i));
+
+      console.log('[AWS List] Found audio files:', {
+        total: response.Contents?.length || 0,
+        audioFiles: audioFiles.length
+      });
 
       const tracks = await Promise.all(
-        (response.Contents || [])
-          .filter(obj => obj.Key?.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i))
-          .map(async obj => {
-            const key = obj.Key!;
-            const pathParts = key.split('/');
-            const fileName = pathParts[pathParts.length - 1];
-            const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
+        audioFiles.map(async obj => {
+          const key = obj.Key!;
+          const pathParts = key.split('/');
+          const fileName = pathParts[pathParts.length - 1];
+          const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
 
-            const getObjectCommand = new GetObjectCommand({
-              Bucket: bucket,
-              Key: key,
-              ResponseContentType: 'audio/mpeg',
-              ResponseContentDisposition: `attachment; filename="${encodeURIComponent(fileName)}"`,
-            });
-            
-            const url = await getSignedUrl(s3Client!, getObjectCommand, {
-              expiresIn: 3600,
-            });
+          const getObjectCommand = new GetObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            ResponseContentType: 'audio/mpeg',
+            ResponseContentDisposition: `attachment; filename="${encodeURIComponent(fileName)}"`,
+          });
+          
+          const url = await getSignedUrl(s3Client!, getObjectCommand, {
+            expiresIn: 3600,
+          });
 
-            return {
-              key,
-              size: obj.Size,
-              lastModified: obj.LastModified,
-              url,
-              album,
-              fileName,
-              contentType: 'audio/mpeg',
-            };
-          })
+          return {
+            key,
+            size: obj.Size,
+            lastModified: obj.LastModified,
+            url,
+            album,
+            fileName,
+            contentType: 'audio/mpeg',
+          };
+        })
       );
 
-      console.log(`[AWS List] Processed ${tracks.length} audio tracks`);
+      console.log('[AWS List] Processed tracks:', {
+        count: tracks.length,
+        pageComplete: tracks.length === audioFiles.length
+      });
 
       res.json({
         tracks,
@@ -179,11 +207,35 @@ export function registerRoutes(app: Express) {
       });
     } catch (error) {
       console.error("[AWS List] Error listing S3 objects:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      // Handle specific S3 errors
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('access denied') || 
+            errorMessage.includes('forbidden') || 
+            errorMessage.includes('not authorized')) {
+          return res.status(403).json({
+            error: "Access Denied",
+            message: "Insufficient permissions to list bucket contents"
+          });
+        }
+        if (errorMessage.includes('no such bucket')) {
+          return res.status(404).json({
+            error: "Bucket Not Found",
+            message: "The specified bucket does not exist"
+          });
+        }
+        if (errorMessage.includes('invalid continuation token')) {
+          return res.status(400).json({
+            error: "Invalid Pagination Token",
+            message: "The provided continuation token is invalid or expired"
+          });
+        }
+      }
       
       res.status(500).json({ 
         error: "Failed to list S3 objects",
-        message: errorMessage
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
       });
     }
   });

@@ -11,6 +11,7 @@ interface TracksCache {
   isTruncated: boolean;
   totalFound: number;
   lastPage: number;
+  pageSize: number;
 }
 
 export function saveAwsCredentials(credentials: S3Credentials): void {
@@ -45,7 +46,8 @@ export function saveTracksToCache(
   nextContinuationToken?: string, 
   isTruncated: boolean = false,
   totalFound: number = 0,
-  lastPage: number = 1
+  lastPage: number = 1,
+  pageSize: number = 100
 ): void {
   try {
     const cacheData: TracksCache = {
@@ -54,14 +56,16 @@ export function saveTracksToCache(
       nextContinuationToken,
       isTruncated,
       totalFound,
-      lastPage
+      lastPage,
+      pageSize
     };
     console.log('[Storage] Saving tracks to cache:', {
       trackCount: tracks.length,
       nextToken: nextContinuationToken,
       isTruncated,
       totalFound,
-      lastPage
+      lastPage,
+      pageSize
     });
     localStorage.setItem(TRACKS_CACHE_KEY, JSON.stringify(cacheData));
   } catch (error) {
@@ -77,8 +81,16 @@ export function getTracksFromCache(): TracksCache | null {
     const cacheData: TracksCache = JSON.parse(cached);
     const now = Date.now();
 
+    // Check if cache is expired
     if (now - cacheData.timestamp > CACHE_EXPIRY_TIME) {
       console.log('[Storage] Cache expired, clearing...');
+      clearTracksCache();
+      return null;
+    }
+
+    // Check if we have all pages when the data is truncated
+    if (cacheData.isTruncated && !cacheData.nextContinuationToken) {
+      console.log('[Storage] Invalid pagination state, clearing cache...');
       clearTracksCache();
       return null;
     }
@@ -88,7 +100,8 @@ export function getTracksFromCache(): TracksCache | null {
       nextToken: cacheData.nextContinuationToken,
       isTruncated: cacheData.isTruncated,
       totalFound: cacheData.totalFound,
-      lastPage: cacheData.lastPage
+      lastPage: cacheData.lastPage,
+      pageSize: cacheData.pageSize
     });
     return cacheData;
   } catch (error) {
@@ -109,7 +122,8 @@ export function updateTracksCache(
   newTracks: Track[], 
   nextContinuationToken?: string, 
   isTruncated: boolean = false,
-  totalFound: number = 0
+  totalFound: number = 0,
+  pageSize: number = 100
 ): void {
   const existingCache = getTracksFromCache();
   let updatedTracks: Track[];
@@ -132,6 +146,17 @@ export function updateTracksCache(
     updatedTracks = Array.from(uniqueTracks.values());
     lastPage = existingCache.lastPage + 1;
 
+    // Validate pagination consistency
+    if (existingCache.pageSize !== pageSize) {
+      console.warn('[Storage] Page size mismatch, resetting cache:', {
+        oldSize: existingCache.pageSize,
+        newSize: pageSize
+      });
+      clearTracksCache();
+      updatedTracks = newTracks;
+      lastPage = 1;
+    }
+
     console.log('[Storage] Updated tracks cache:', {
       previousCount: existingCache.tracks.length,
       newCount: newTracks.length,
@@ -151,7 +176,8 @@ export function updateTracksCache(
     nextContinuationToken,
     isTruncated,
     totalFound || updatedTracks.length,
-    lastPage
+    lastPage,
+    pageSize
   );
 }
 

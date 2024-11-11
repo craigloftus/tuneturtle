@@ -7,6 +7,9 @@ import {
   clearTracksCache 
 } from "./storage";
 
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF = 1000; // 1 second
+
 export async function validateS3Credentials(credentials: S3Credentials) {
   const response = await fetch('/api/aws/validate', {
     method: 'POST',
@@ -38,13 +41,19 @@ interface PaginationOptions {
   limit?: number;
   continuationToken?: string;
   useCache?: boolean;
+  retryCount?: number;
+}
+
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export async function listS3Objects(options: PaginationOptions = {}): Promise<ListResponse> {
   const { 
     limit = 100,
     continuationToken,
-    useCache = true 
+    useCache = true,
+    retryCount = 0
   } = options;
 
   // Check cache first if no continuation token is provided and cache is enabled
@@ -54,7 +63,8 @@ export async function listS3Objects(options: PaginationOptions = {}): Promise<Li
       console.log('[AWS] Using cached track data:', {
         trackCount: cachedData.tracks.length,
         nextToken: cachedData.nextContinuationToken,
-        isTruncated: cachedData.isTruncated
+        isTruncated: cachedData.isTruncated,
+        currentPage: cachedData.lastPage
       });
       return {
         tracks: cachedData.tracks,
@@ -77,7 +87,8 @@ export async function listS3Objects(options: PaginationOptions = {}): Promise<Li
   try {
     console.log('[AWS] Fetching tracks:', {
       limit,
-      continuationToken: continuationToken || 'none'
+      continuationToken: continuationToken || 'none',
+      retryAttempt: retryCount
     });
 
     const response = await fetch(`/api/aws/list?${params.toString()}`);
@@ -108,6 +119,22 @@ export async function listS3Objects(options: PaginationOptions = {}): Promise<Li
     return data;
   } catch (error) {
     console.error('[AWS] Error fetching tracks:', error);
+    
+    // Implement exponential backoff for retries
+    if (retryCount < MAX_RETRIES) {
+      const backoffTime = INITIAL_BACKOFF * Math.pow(2, retryCount);
+      console.log(`[AWS] Retrying in ${backoffTime}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      
+      await delay(backoffTime);
+      
+      return listS3Objects({
+        limit,
+        continuationToken,
+        useCache,
+        retryCount: retryCount + 1
+      });
+    }
+    
     throw error;
   }
 }
@@ -118,26 +145,57 @@ export async function loadAllTracks(pageSize: number = 100): Promise<Track[]> {
   let continuationToken: string | undefined;
   let isTruncated = true;
   let page = 1;
+  let totalPages = 0;
+  let failedAttempts = 0;
 
   try {
     while (isTruncated) {
-      console.log('[AWS] Loading page', page, 'with token:', continuationToken || 'none');
-      const response = await listS3Objects({
-        limit: pageSize,
-        continuationToken,
-        useCache: page === 1 // Only use cache for first page
+      console.log('[AWS] Loading page', page, {
+        token: continuationToken || 'none',
+        tracksLoaded: allTracks.length,
+        failedAttempts
       });
 
-      allTracks = [...allTracks, ...response.tracks];
-      continuationToken = response.nextContinuationToken;
-      isTruncated = response.isTruncated;
-      page++;
+      try {
+        const response = await listS3Objects({
+          limit: pageSize,
+          continuationToken,
+          useCache: page === 1 // Only use cache for first page
+        });
 
-      console.log('[AWS] Loaded page', page - 1, ':', {
-        newTracks: response.tracks.length,
-        totalTracks: allTracks.length,
-        hasMore: isTruncated
-      });
+        allTracks = [...allTracks, ...response.tracks];
+        continuationToken = response.nextContinuationToken;
+        isTruncated = response.isTruncated;
+        
+        // Calculate total pages if we have the total count
+        if (response.totalFound && !totalPages) {
+          totalPages = Math.ceil(response.totalFound / pageSize);
+        }
+
+        console.log('[AWS] Loaded page', page, {
+          newTracks: response.tracks.length,
+          totalTracks: allTracks.length,
+          progress: totalPages ? `${page}/${totalPages}` : 'unknown',
+          hasMore: isTruncated
+        });
+
+        // Reset failed attempts on successful request
+        failedAttempts = 0;
+        page++;
+      } catch (error) {
+        failedAttempts++;
+        console.error('[AWS] Error loading page', page, error);
+
+        if (failedAttempts >= MAX_RETRIES) {
+          throw new Error(`Failed to load page ${page} after ${MAX_RETRIES} attempts`);
+        }
+
+        const backoffTime = INITIAL_BACKOFF * Math.pow(2, failedAttempts - 1);
+        console.log(`[AWS] Retrying page ${page} in ${backoffTime}ms (attempt ${failedAttempts}/${MAX_RETRIES})`);
+        await delay(backoffTime);
+        // Continue without incrementing page to retry the same page
+        continue;
+      }
     }
 
     console.log('[AWS] Finished loading all tracks:', {
