@@ -11,6 +11,13 @@ import { Loader2, Grid, List, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 
+interface TracksResponse {
+  tracks: Track[];
+  nextContinuationToken?: string;
+  isTruncated: boolean;
+  totalFound: number;
+}
+
 export function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -19,7 +26,7 @@ export function Home() {
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [isTimeout, setIsTimeout] = useState(false);
 
-  const { data: tracks, error, isLoading } = useSWR<Track[]>("/api/aws/list", {
+  const { data, error, isLoading } = useSWR<TracksResponse>("/api/aws/list", {
     onError: (err) => {
       console.error("[Home] Track loading error:", err);
       if (err.status === 401 || err.info?.error === "No credentials") {
@@ -37,34 +44,25 @@ export function Home() {
 
   // Process tracks into albums
   const albums = useMemo(() => {
-    if (!tracks) return [];
+    if (!data?.tracks) return [];
     
     const albumMap = new Map<string, Track[]>();
     
-    tracks.forEach(track => {
+    data.tracks.forEach(track => {
       // Extract album name from first part of the path
-      const keyParts = track.key.split('/');
-      const album = keyParts[0] || 'Unknown Album';
-      const fileName = keyParts[keyParts.length - 1]?.replace(/\.[^/.]+$/, '') || 'Unknown Track';
+      const albumName = track.album || 'Unknown Album';
       
       console.debug('[Album Processing] Processing track:', {
         key: track.key,
-        album,
-        fileName
+        album: albumName,
+        fileName: track.fileName
       });
 
-      // Create the processed track
-      const processedTrack: Track = {
-        ...track,
-        album,
-        fileName
-      };
-      
       // Add track to album map
-      if (!albumMap.has(album)) {
-        albumMap.set(album, []);
+      if (!albumMap.has(albumName)) {
+        albumMap.set(albumName, []);
       }
-      albumMap.get(album)!.push(processedTrack);
+      albumMap.get(albumName)!.push(track);
     });
 
     // Debug: Log final album structure
@@ -81,7 +79,7 @@ export function Home() {
       tracks,
       coverUrl: undefined // This will be handled in the next step
     }));
-  }, [tracks]);
+  }, [data?.tracks]);
 
   // Find current album based on current track
   const currentAlbum = useMemo(() => {
@@ -132,7 +130,7 @@ export function Home() {
     );
   }
 
-  if (!tracks?.length) {
+  if (!data?.tracks?.length) {
     return (
       <div className="container mx-auto p-4">
         <Alert>
@@ -168,18 +166,18 @@ export function Home() {
   };
 
   const currentIndex = currentTrack 
-    ? tracks.findIndex(t => t.key === currentTrack.key)
+    ? data.tracks.findIndex(t => t.key === currentTrack.key)
     : -1;
 
   const handleNext = () => {
-    if (currentIndex < tracks.length - 1) {
-      setCurrentTrack(tracks[currentIndex + 1]);
+    if (currentIndex < data.tracks.length - 1) {
+      setCurrentTrack(data.tracks[currentIndex + 1]);
     }
   };
 
   const handlePrevious = () => {
     if (currentIndex > 0) {
-      setCurrentTrack(tracks[currentIndex - 1]);
+      setCurrentTrack(data.tracks[currentIndex - 1]);
     }
   };
 
@@ -238,7 +236,7 @@ export function Home() {
             />
           ) : (
             <TrackList
-              tracks={tracks}
+              tracks={data.tracks}
               onSelect={setCurrentTrack}
               currentTrack={currentTrack}
               selectedAlbum={selectedAlbum}
@@ -249,7 +247,7 @@ export function Home() {
       
       <AudioPlayer
         track={currentTrack}
-        onNext={currentIndex < tracks.length - 1 ? handleNext : undefined}
+        onNext={currentIndex < data.tracks.length - 1 ? handleNext : undefined}
         onPrevious={currentIndex > 0 ? handlePrevious : undefined}
       />
     </div>

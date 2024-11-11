@@ -24,13 +24,11 @@ const requestLogger = (req: Request, res: Response, next: NextFunction) => {
 
 // CORS middleware for audio streaming
 const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // Set CORS headers
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
   res.header('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Disposition');
   
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
@@ -40,14 +38,12 @@ const corsMiddleware = (req: Request, res: Response, next: NextFunction) => {
 
 async function validateBucketPermissions(s3: S3Client, bucket: string) {
   try {
-    // Test ListBucket permission
     const listCommand = new ListObjectsV2Command({
       Bucket: bucket,
       MaxKeys: 1,
     });
     await s3.send(listCommand);
 
-    // Test GetObject permission by attempting to get a signed URL
     const objects = await s3.send(listCommand);
     if (objects.Contents && objects.Contents.length > 0) {
       const getCommand = new GetObjectCommand({
@@ -73,7 +69,6 @@ async function validateBucketPermissions(s3: S3Client, bucket: string) {
 }
 
 export function registerRoutes(app: Express) {
-  // Add request logging middleware
   app.use('/api', requestLogger);
   app.use('/api', corsMiddleware);
 
@@ -87,11 +82,9 @@ export function registerRoutes(app: Express) {
         region,
       });
 
-      // Validate required permissions
       await validateBucketPermissions(s3Client, bucket);
       console.log(`[AWS Validate] Successfully validated credentials and permissions for bucket: ${bucket}`);
 
-      // Store credentials in session
       req.session.awsConfig = { accessKeyId, secretAccessKey, region, bucket };
       
       res.json({ success: true });
@@ -107,14 +100,16 @@ export function registerRoutes(app: Express) {
   });
 
   app.get("/api/aws/list", async (req, res) => {
-    // Verify session
     if (!req.session.awsConfig) {
       console.warn("[AWS List] No credentials found in session");
       return res.status(401).json({ error: "No credentials" });
     }
 
     const { bucket } = req.session.awsConfig;
-    console.log(`[AWS List] Listing objects in bucket: ${bucket}`);
+    const continuationToken = req.query.continuationToken as string | undefined;
+    const limit = Number(req.query.limit) || 100;
+    
+    console.log(`[AWS List] Listing objects in bucket: ${bucket}, continuation token: ${continuationToken}`);
 
     try {
       if (!s3Client) {
@@ -130,6 +125,8 @@ export function registerRoutes(app: Express) {
 
       const command = new ListObjectsV2Command({
         Bucket: bucket,
+        MaxKeys: limit,
+        ContinuationToken: continuationToken,
       });
 
       const response = await s3Client.send(command);
@@ -137,13 +134,19 @@ export function registerRoutes(app: Express) {
 
       const tracks = await Promise.all(
         (response.Contents || [])
-          .filter(obj => obj.Key?.toLowerCase().match(/\.mp3$/i))
+          .filter(obj => obj.Key?.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i))
           .map(async obj => {
+            const key = obj.Key!;
+            // Extract album and filename from the path
+            const pathParts = key.split('/');
+            const fileName = pathParts[pathParts.length - 1];
+            const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
+
             const getObjectCommand = new GetObjectCommand({
               Bucket: bucket,
-              Key: obj.Key,
+              Key: key,
               ResponseContentType: 'audio/mpeg',
-              ResponseContentDisposition: `attachment; filename="${encodeURIComponent(obj.Key || '')}"`,
+              ResponseContentDisposition: `attachment; filename="${encodeURIComponent(fileName)}"`,
             });
             
             const url = await getSignedUrl(s3Client!, getObjectCommand, {
@@ -151,17 +154,23 @@ export function registerRoutes(app: Express) {
             });
 
             return {
-              key: obj.Key,
+              key,
               size: obj.Size,
               lastModified: obj.LastModified,
               url,
+              album,
+              fileName,
               contentType: 'audio/mpeg',
             };
           })
       );
 
-      console.log(`[AWS List] Returning ${tracks.length} audio tracks`);
-      res.json(tracks);
+      res.json({
+        tracks,
+        nextContinuationToken: response.NextContinuationToken,
+        isTruncated: response.IsTruncated,
+        totalFound: response.KeyCount
+      });
     } catch (error) {
       console.error("[AWS List] Error listing S3 objects:", error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
