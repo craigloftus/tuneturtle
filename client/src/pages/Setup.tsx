@@ -20,7 +20,7 @@ export function Setup() {
             title: "Success",
             description: "Reconnected to S3 using stored credentials",
           });
-          navigate("/");
+          navigate("/indexing");
         })
         .catch(() => {
           // Invalid stored credentials, continue with setup
@@ -37,7 +37,7 @@ export function Setup() {
         title: "Success",
         description: "Successfully connected to S3",
       });
-      navigate("/");
+      navigate("/indexing");
     } catch (error) {
       toast({
         title: "Error",

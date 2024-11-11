@@ -1,14 +1,15 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Track, Album, ViewMode } from "@/types/aws";
 import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Grid, List, ArrowLeft } from "lucide-react";
+import { Grid, List, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { S3Service } from "@/lib/services/S3Service";
+import { useToast } from "@/hooks/use-toast";
 
 export function Home() {
   const [, navigate] = useLocation();
@@ -16,81 +17,67 @@ export function Home() {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isTimeout, setIsTimeout] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    
-  };
+    const loadTracks = async () => {
+      try {
+        const s3Service = S3Service.getInstance();
+        const result = await s3Service.listObjects({ useCache: true });
+        setTracks(result.tracks);
+      } catch (err) {
+        setError("Failed to load music library. Please check your settings.");
+        toast({
+          title: "Error",
+          description: (err as Error).message,
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTracks();
+  }, [toast]);
 
   // Process tracks into albums
-  const albums = useMemo(() => {
-    const albumMap = new Map<string, Track[]>();
+  const albums = tracks.reduce((acc, track) => {
+    const albumName = track.album || 'Unknown Album';
+    const existing = acc.find(a => a.name === albumName);
     
-    tracks.forEach(track => {
-      const albumName = track.album || 'Unknown Album';
-      
-      if (!albumMap.has(albumName)) {
-        albumMap.set(albumName, []);
-      }
-      albumMap.get(albumName)!.push(track);
-    });
+    if (existing) {
+      existing.tracks.push(track);
+    } else {
+      acc.push({ name: albumName, tracks: [track], coverUrl: undefined });
+    }
     
-    return Array.from(albumMap.entries()).map(([name, albumTracks]) => ({
-      name,
-      tracks: albumTracks,
-      coverUrl: undefined
-    }));
-  }, [tracks]);
+    return acc;
+  }, [] as Album[]);
 
   // Find current album based on current track
-  const currentAlbum = useMemo(() => {
-    if (!currentTrack) return null;
-    return albums.find(album => 
-      album.name.toLowerCase() === (currentTrack.album || '').toLowerCase()
-    ) || null;
-  }, [currentTrack, albums]);
-
-  // Set up loading timeout
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (isLoading) {
-        setIsTimeout(true);
-        console.warn("[Home] Loading timeout reached");
-      }
-    }, 10000); // 10 second timeout
-
-    return () => clearTimeout(timeoutId);
-  }, [isLoading]);
-
-  if (error?.message.includes('No AWS credentials')) {
-    return null; // Navigation will happen in error handler
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">
-            {isTimeout ? "Still loading... This is taking longer than usual." : "Loading tracks..."}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const currentAlbum = currentTrack 
+    ? albums.find(album => album.tracks.some(t => t.key === currentTrack.key))
+    : null;
 
   if (error) {
     return (
       <div className="container mx-auto p-4">
         <Alert variant="destructive">
-          <AlertDescription>
-            Failed to load tracks: {error.message}
-          </AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
+        <Button onClick={() => navigate("/setup")} className="mt-4">
+          Go to Settings
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-4 text-center">
+        <p className="text-muted-foreground">Loading your music library...</p>
       </div>
     );
   }
@@ -100,24 +87,19 @@ export function Home() {
       <div className="container mx-auto p-4">
         <Alert>
           <AlertDescription>
-            No music tracks found in your S3 bucket. Upload some audio files to get started.
+            No music tracks found. Please complete the setup process first.
           </AlertDescription>
         </Alert>
+        <Button onClick={() => navigate("/setup")} className="mt-4">
+          Go to Setup
+        </Button>
       </div>
     );
   }
 
   const handleAlbumSelect = (album: Album) => {
-    console.debug('[Album Selected]', {
-      albumName: album.name,
-      trackCount: album.tracks.length
-    });
-    
     setSelectedAlbum(album);
     setViewMode('list');
-    if (album.tracks.length > 0) {
-      setCurrentTrack(album.tracks[0]);
-    }
   };
 
   const handleBackToGrid = () => {
@@ -132,9 +114,6 @@ export function Home() {
   const handleNext = () => {
     if (currentIndex < tracks.length - 1) {
       setCurrentTrack(tracks[currentIndex + 1]);
-    } else if (hasMore) {
-      // Load more tracks if we're at the end and there are more available
-      loadMoreTracks();
     }
   };
 
@@ -148,20 +127,10 @@ export function Home() {
     <div className="container mx-auto p-4 pb-32">
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center space-x-4">
-          {viewMode === 'list' && selectedAlbum && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleBackToGrid}
-              className="mr-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          )}
           <h1 className="text-3xl font-bold">
             {viewMode === 'list' && selectedAlbum 
               ? selectedAlbum.name
-              : 'Music Player'
+              : 'Music Library'
             }
           </h1>
         </div>
@@ -179,6 +148,13 @@ export function Home() {
             onClick={() => setViewMode('list')}
           >
             <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/setup")}
+          >
+            <Settings className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -203,34 +179,16 @@ export function Home() {
               onSelect={setCurrentTrack}
               currentTrack={currentTrack}
               selectedAlbum={selectedAlbum}
+              onBackToGrid={handleBackToGrid}
             />
           )}
         </motion.div>
       </AnimatePresence>
-
-      {hasMore && !selectedAlbum && viewMode === 'list' && (
-        <div className="flex justify-center mt-4">
-          <Button
-            onClick={loadMoreTracks}
-            disabled={isLoadingMore}
-            variant="outline"
-          >
-            {isLoadingMore ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Loading more...
-              </>
-            ) : (
-              'Load More Tracks'
-            )}
-          </Button>
-        </div>
-      )}
       
       <AudioPlayer
         track={currentTrack}
-        onNext={currentIndex < tracks.length - 1 || hasMore ? handleNext : undefined}
-        onPrevious={currentIndex > 0 ? handlePrevious : undefined}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
       />
     </div>
   );
