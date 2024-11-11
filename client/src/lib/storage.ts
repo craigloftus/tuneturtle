@@ -1,7 +1,8 @@
-import { S3Credentials, Track } from "@/types/aws";
+import { S3Credentials, Track, TrackMetadata } from "@/types/aws";
 
 const AWS_CREDENTIALS_KEY = 'aws_credentials';
 const TRACKS_CACHE_KEY = 'tracks_cache';
+const METADATA_CACHE_KEY = 'metadata_cache';
 const CACHE_EXPIRY_TIME = 30 * 60 * 1000; // 30 minutes
 
 interface TracksCache {
@@ -12,6 +13,14 @@ interface TracksCache {
   totalFound: number;
   lastPage: number;
   pageSize: number;
+}
+
+interface MetadataCache {
+  [key: string]: {
+    metadata: TrackMetadata;
+    timestamp: number;
+    eTag?: string;
+  };
 }
 
 export function saveAwsCredentials(credentials: S3Credentials): void {
@@ -36,6 +45,7 @@ export function clearAwsCredentials(): void {
   try {
     localStorage.removeItem(AWS_CREDENTIALS_KEY);
     clearTracksCache();
+    clearMetadataCache();
   } catch (error) {
     console.error('[Storage] Failed to clear AWS credentials from localStorage:', error);
   }
@@ -59,6 +69,7 @@ export function saveTracksToCache(
       lastPage,
       pageSize
     };
+    
     console.log('[Storage] Saving tracks to cache:', {
       trackCount: tracks.length,
       nextToken: nextContinuationToken,
@@ -67,6 +78,7 @@ export function saveTracksToCache(
       lastPage,
       pageSize
     });
+    
     localStorage.setItem(TRACKS_CACHE_KEY, JSON.stringify(cacheData));
   } catch (error) {
     console.error('[Storage] Failed to save tracks to cache:', error);
@@ -81,14 +93,12 @@ export function getTracksFromCache(): TracksCache | null {
     const cacheData: TracksCache = JSON.parse(cached);
     const now = Date.now();
 
-    // Check if cache is expired
     if (now - cacheData.timestamp > CACHE_EXPIRY_TIME) {
       console.log('[Storage] Cache expired, clearing...');
       clearTracksCache();
       return null;
     }
 
-    // Check if we have all pages when the data is truncated
     if (cacheData.isTruncated && !cacheData.nextContinuationToken) {
       console.log('[Storage] Invalid pagination state, clearing cache...');
       clearTracksCache();
@@ -103,6 +113,7 @@ export function getTracksFromCache(): TracksCache | null {
       lastPage: cacheData.lastPage,
       pageSize: cacheData.pageSize
     });
+    
     return cacheData;
   } catch (error) {
     console.error('[Storage] Failed to retrieve tracks from cache:', error);
@@ -118,6 +129,61 @@ export function clearTracksCache(): void {
   }
 }
 
+export function saveMetadataToCache(key: string, metadata: TrackMetadata, eTag?: string): void {
+  try {
+    const existingCache = getMetadataFromCache();
+    const updatedCache: MetadataCache = {
+      ...existingCache,
+      [key]: {
+        metadata,
+        timestamp: Date.now(),
+        eTag
+      }
+    };
+    
+    localStorage.setItem(METADATA_CACHE_KEY, JSON.stringify(updatedCache));
+    console.log('[Storage] Saved metadata to cache:', { key, metadata });
+  } catch (error) {
+    console.error('[Storage] Failed to save metadata to cache:', error);
+  }
+}
+
+export function getMetadataFromCache(): MetadataCache {
+  try {
+    const cached = localStorage.getItem(METADATA_CACHE_KEY);
+    if (!cached) return {};
+
+    const cacheData: MetadataCache = JSON.parse(cached);
+    const now = Date.now();
+    
+    // Clean expired entries
+    const cleanedCache: MetadataCache = {};
+    Object.entries(cacheData).forEach(([key, entry]) => {
+      if (now - entry.timestamp <= CACHE_EXPIRY_TIME) {
+        cleanedCache[key] = entry;
+      }
+    });
+    
+    return cleanedCache;
+  } catch (error) {
+    console.error('[Storage] Failed to retrieve metadata from cache:', error);
+    return {};
+  }
+}
+
+export function clearMetadataCache(): void {
+  try {
+    localStorage.removeItem(METADATA_CACHE_KEY);
+  } catch (error) {
+    console.error('[Storage] Failed to clear metadata cache:', error);
+  }
+}
+
+export function getCachedMetadataForTrack(key: string): TrackMetadata | null {
+  const cache = getMetadataFromCache();
+  return cache[key]?.metadata || null;
+}
+
 export function updateTracksCache(
   newTracks: Track[], 
   nextContinuationToken?: string, 
@@ -130,23 +196,12 @@ export function updateTracksCache(
   let lastPage = 1;
 
   if (existingCache) {
-    // Merge new tracks with existing ones, avoiding duplicates
     const uniqueTracks = new Map<string, Track>();
-    
-    // First add existing tracks to the map
-    existingCache.tracks.forEach(track => {
-      uniqueTracks.set(track.key, track);
-    });
-
-    // Then add/update with new tracks
-    newTracks.forEach(track => {
-      uniqueTracks.set(track.key, track);
-    });
-
+    existingCache.tracks.forEach(track => uniqueTracks.set(track.key, track));
+    newTracks.forEach(track => uniqueTracks.set(track.key, track));
     updatedTracks = Array.from(uniqueTracks.values());
     lastPage = existingCache.lastPage + 1;
 
-    // Validate pagination consistency
     if (existingCache.pageSize !== pageSize) {
       console.warn('[Storage] Page size mismatch, resetting cache:', {
         oldSize: existingCache.pageSize,
@@ -156,19 +211,8 @@ export function updateTracksCache(
       updatedTracks = newTracks;
       lastPage = 1;
     }
-
-    console.log('[Storage] Updated tracks cache:', {
-      previousCount: existingCache.tracks.length,
-      newCount: newTracks.length,
-      totalCount: updatedTracks.length,
-      lastPage
-    });
   } else {
     updatedTracks = newTracks;
-    console.log('[Storage] Created new tracks cache:', {
-      trackCount: newTracks.length,
-      lastPage
-    });
   }
 
   saveTracksToCache(

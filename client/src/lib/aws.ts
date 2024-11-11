@@ -7,18 +7,21 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import * as mm from 'music-metadata-browser';
-import { S3Credentials, Track } from "@/types/aws";
+import { S3Credentials, Track, TrackMetadata } from "@/types/aws";
 import { 
   saveAwsCredentials, 
   getAwsCredentials, 
   getTracksFromCache, 
-  updateTracksCache, 
-  clearTracksCache 
+  updateTracksCache,
+  clearTracksCache,
+  saveMetadataToCache,
+  getCachedMetadataForTrack
 } from "./storage";
 
 let s3Client: S3Client | null = null;
 const METADATA_BYTE_RANGE = 5000;
 const SIGNED_URL_EXPIRY = 3600;
+const BATCH_SIZE = 5; // Number of concurrent metadata fetches
 
 interface ListResponse {
   tracks: Track[];
@@ -42,8 +45,6 @@ async function initializeS3Client(credentials: S3Credentials) {
 export async function validateS3Credentials(credentials: S3Credentials) {
   try {
     const client = await initializeS3Client(credentials);
-    
-    // Test bucket access with a minimal request
     const command = new ListObjectsV2Command({
       Bucket: credentials.bucket,
       MaxKeys: 1,
@@ -59,26 +60,40 @@ export async function validateS3Credentials(credentials: S3Credentials) {
   }
 }
 
-async function extractMetadata(audioBlob: Blob): Promise<mm.IAudioMetadata> {
+async function extractMetadata(audioBlob: Blob): Promise<TrackMetadata> {
   try {
-    return await mm.parseBlob(audioBlob, { duration: true });
+    const metadata = await mm.parseBlob(audioBlob, { duration: true });
+    return {
+      title: metadata.common.title || '',
+      artist: metadata.common.artist || 'Unknown Artist',
+      duration: metadata.format.duration || 0,
+      bitrate: metadata.format.bitrate || 0,
+      mimeType: metadata.format.mimeType || 'audio/mpeg'
+    };
   } catch (error) {
     console.warn('[AWS] Metadata extraction failed:', error);
-    return {} as mm.IAudioMetadata;
+    return {
+      title: '',
+      artist: 'Unknown Artist',
+      duration: 0,
+      bitrate: 0,
+      mimeType: 'audio/mpeg'
+    };
   }
 }
 
-async function processS3Object(
-  obj: _Object, 
+export async function fetchTrackMetadata(
+  key: string,
   bucket: string,
   client: S3Client
-): Promise<Track | null> {
-  const key = obj.Key!;
-  if (!key.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i)) {
-    return null;
-  }
-
+): Promise<TrackMetadata | null> {
   try {
+    // Check cache first
+    const cachedMetadata = getCachedMetadataForTrack(key);
+    if (cachedMetadata) {
+      return cachedMetadata;
+    }
+
     // Get metadata using byte range
     const getCommand = new GetObjectCommand({
       Bucket: bucket,
@@ -88,42 +103,50 @@ async function processS3Object(
 
     const response = await client.send(getCommand);
     const metadataBlob = await response.Body?.transformToByteArray();
-    const metadata = metadataBlob ? await extractMetadata(new Blob([metadataBlob])) : null;
-
-    // Generate signed URL for full track
-    const fullTrackCommand = new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ResponseContentType: metadata?.format?.mimeType || 'audio/mpeg',
-    });
     
-    const url = await getSignedUrl(client, fullTrackCommand, {
-      expiresIn: SIGNED_URL_EXPIRY
-    });
+    if (!metadataBlob) {
+      throw new Error('Failed to read metadata blob');
+    }
 
-    const pathParts = key.split('/');
-    const fileName = pathParts[pathParts.length - 1];
-    const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
-
-    return {
-      key,
-      size: obj.Size || 0,
-      lastModified: obj.LastModified || new Date(),
-      url,
-      album,
-      fileName,
-      metadata: {
-        title: metadata?.common?.title || fileName,
-        artist: metadata?.common?.artist || 'Unknown Artist',
-        duration: metadata?.format?.duration || 0,
-        bitrate: metadata?.format?.bitrate || 0,
-        mimeType: metadata?.format?.mimeType || 'audio/mpeg'
-      }
-    };
+    const metadata = await extractMetadata(new Blob([metadataBlob]));
+    saveMetadataToCache(key, metadata, response.ETag);
+    
+    return metadata;
   } catch (error) {
-    console.error('[AWS] Failed to process track:', key, error);
+    console.error('[AWS] Failed to fetch metadata for track:', key, error);
     return null;
   }
+}
+
+async function createTrackFromS3Object(
+  obj: _Object,
+  bucket: string,
+  client: S3Client
+): Promise<Track> {
+  const key = obj.Key!;
+  const pathParts = key.split('/');
+  const fileName = pathParts[pathParts.length - 1];
+  const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
+
+  // Generate signed URL
+  const fullTrackCommand = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ResponseContentType: 'audio/mpeg',
+  });
+  
+  const url = await getSignedUrl(client, fullTrackCommand, {
+    expiresIn: SIGNED_URL_EXPIRY
+  });
+
+  return {
+    key,
+    size: obj.Size || 0,
+    lastModified: obj.LastModified || new Date(),
+    url,
+    album,
+    fileName
+  };
 }
 
 export async function listS3Objects(options: {
@@ -178,33 +201,31 @@ export async function listS3Objects(options: {
     });
 
     const response = await s3Client!.send(command);
-    const tracks: Track[] = [];
+    
+    // Filter audio files
+    const audioFiles = (response.Contents || [])
+      .filter(obj => obj.Key?.toLowerCase().match(/\.(mp3|flac|wav|m4a|ogg)$/i));
 
-    // Process objects in parallel
-    const processedTracks = await Promise.all(
-      (response.Contents || []).map(obj => 
-        processS3Object(obj, credentials.bucket, s3Client!)
-      )
+    // Create basic track objects
+    const tracks = await Promise.all(
+      audioFiles.map(obj => createTrackFromS3Object(obj, credentials.bucket, s3Client!))
     );
 
-    // Filter out null results and flatten
-    const validTracks = processedTracks.filter((t): t is Track => t !== null);
-
-    // Update cache with new data
+    // Update cache with basic track info
     if (!continuationToken) {
       updateTracksCache(
-        validTracks,
+        tracks,
         response.NextContinuationToken,
         response.IsTruncated || false,
-        response.KeyCount || validTracks.length
+        response.KeyCount || tracks.length
       );
     }
 
     return {
-      tracks: validTracks,
+      tracks,
       nextContinuationToken: response.NextContinuationToken,
       isTruncated: response.IsTruncated || false,
-      totalFound: response.KeyCount || validTracks.length,
+      totalFound: response.KeyCount || tracks.length,
       maxKeys: limit
     };
   } catch (error) {
@@ -221,6 +242,7 @@ export async function loadAllTracks(pageSize: number = 100): Promise<Track[]> {
   let page = 1;
 
   try {
+    // First, load all tracks without metadata
     while (isTruncated) {
       console.log('[AWS] Loading page', page, {
         token: continuationToken || 'none',
@@ -244,6 +266,35 @@ export async function loadAllTracks(pageSize: number = 100): Promise<Track[]> {
       });
 
       page++;
+    }
+
+    // Then progressively load metadata
+    const credentials = getAwsCredentials();
+    if (!credentials || !s3Client) {
+      throw new Error('No AWS credentials found');
+    }
+
+    // Process metadata in batches
+    for (let i = 0; i < allTracks.length; i += BATCH_SIZE) {
+      const batch = allTracks.slice(i, i + BATCH_SIZE);
+      const metadataPromises = batch.map(track => 
+        fetchTrackMetadata(track.key, credentials.bucket, s3Client!)
+      );
+      
+      const metadataResults = await Promise.all(metadataPromises);
+      
+      // Update tracks with metadata
+      metadataResults.forEach((metadata, index) => {
+        if (metadata) {
+          batch[index].metadata = metadata;
+        }
+      });
+
+      console.log('[AWS] Processed metadata batch:', {
+        start: i,
+        end: i + batch.length,
+        total: allTracks.length
+      });
     }
 
     return allTracks;
