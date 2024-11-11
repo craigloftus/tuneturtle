@@ -9,7 +9,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Grid, List, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
-import { listS3Objects } from "@/lib/aws";
 
 export function Home() {
   const [, navigate] = useLocation();
@@ -21,62 +20,10 @@ export function Home() {
   const [error, setError] = useState<Error | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextToken, setNextToken] = useState<string | undefined>();
   const [isTimeout, setIsTimeout] = useState(false);
 
   useEffect(() => {
-    const loadInitialTracks = async () => {
-      try {
-        setIsLoading(true);
-        const response = await listS3Objects({ limit: 100, useCache: true });
-        setTracks(response.tracks);
-        setNextToken(response.nextContinuationToken);
-        setHasMore(response.isTruncated);
-      } catch (err) {
-        console.error("[Home] Track loading error:", err);
-        if (err instanceof Error && err.message.includes('No AWS credentials')) {
-          navigate("/setup");
-        } else {
-          setError(err instanceof Error ? err : new Error('Failed to load tracks'));
-          toast({
-            variant: "destructive",
-            title: "Error loading tracks",
-            description: err instanceof Error ? err.message : "Failed to load tracks. Please try again.",
-          });
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadInitialTracks();
-  }, [navigate, toast]);
-
-  const loadMoreTracks = async () => {
-    if (!hasMore || isLoadingMore) return;
-
-    try {
-      setIsLoadingMore(true);
-      const response = await listS3Objects({
-        limit: 100,
-        continuationToken: nextToken,
-        useCache: false
-      });
-
-      setTracks(prev => [...prev, ...response.tracks]);
-      setNextToken(response.nextContinuationToken);
-      setHasMore(response.isTruncated);
-    } catch (err) {
-      console.error("[Home] Error loading more tracks:", err);
-      toast({
-        variant: "destructive",
-        title: "Error loading more tracks",
-        description: err instanceof Error ? err.message : "Failed to load more tracks. Please try again.",
-      });
-    } finally {
-      setIsLoadingMore(false);
-    }
+    
   };
 
   // Process tracks into albums
