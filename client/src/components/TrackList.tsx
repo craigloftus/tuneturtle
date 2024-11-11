@@ -11,14 +11,14 @@ interface TrackListProps {
 }
 
 export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: TrackListProps) {
-  // Debug log before filtering
-  console.debug('[TrackList] Before filtering:', {
+  // Debug log input tracks
+  console.debug('[TrackList] Initial data:', {
     totalTracks: tracks.length,
     selectedAlbumName: selectedAlbum?.name,
-    firstTrackAlbum: tracks[0]?.album,
-    tracksWithAlbum: tracks.slice(0, 3).map(t => ({
+    sampleTracks: tracks.slice(0, 3).map(t => ({
       key: t.key,
-      album: t.album || 'Unknown'
+      album: t.album,
+      fileName: t.fileName
     }))
   });
 
@@ -27,39 +27,53 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
     ? tracks.filter(track => {
         const trackAlbum = track.album || '';
         const selectedAlbumName = selectedAlbum.name || '';
-        const matches = trackAlbum.trim() === selectedAlbumName.trim();
+        
+        // Normalize both strings for comparison
+        const normalizedTrackAlbum = trackAlbum.trim().toLowerCase();
+        const normalizedSelectedAlbum = selectedAlbumName.trim().toLowerCase();
+        
+        const matches = normalizedTrackAlbum === normalizedSelectedAlbum;
+        
         console.debug('[TrackList] Track match:', {
-          trackAlbum: track.album || 'Unknown',
-          selectedAlbum: selectedAlbum?.name || 'Unknown',
+          key: track.key,
+          trackAlbum: normalizedTrackAlbum,
+          selectedAlbum: normalizedSelectedAlbum,
           matches
         });
+        
         return matches;
       })
     : tracks;
 
-  // Debug log after filtering
+  // Debug log filtered tracks
   console.debug('[TrackList] After filtering:', {
     filteredCount: filteredTracks.length,
-    selectedAlbum: selectedAlbum?.name || 'Unknown',
-    sampleTracks: filteredTracks.slice(0, 3).map(t => t.fileName)
+    selectedAlbum: selectedAlbum?.name || 'All',
+    sampleTracks: filteredTracks.slice(0, 3).map(t => ({
+      key: t.key,
+      album: t.album,
+      fileName: t.fileName
+    }))
   });
 
   // Group tracks by album if no specific album is selected
   const tracksByAlbum = filteredTracks.reduce((acc, track) => {
-    if (!selectedAlbum) {
-      if (!acc[track.album || 'Unknown']) {
-        acc[track.album || 'Unknown'] = [];
-      }
-      acc[track.album || 'Unknown'].push(track);
-    } else {
-      // If an album is selected, use a single group
-      if (!acc['tracks']) {
-        acc['tracks'] = [];
-      }
-      acc['tracks'].push(track);
+    const albumName = selectedAlbum ? 'tracks' : (track.album || 'Unknown');
+    if (!acc[albumName]) {
+      acc[albumName] = [];
     }
+    acc[albumName].push(track);
     return acc;
   }, {} as Record<string, Track[]>);
+
+  // Debug log final grouping
+  console.debug('[TrackList] Final grouping:', 
+    Object.entries(tracksByAlbum).map(([album, tracks]) => ({
+      album,
+      trackCount: tracks.length,
+      sampleTrack: tracks[0]?.fileName
+    }))
+  );
 
   // Helper function to get display name for track
   const getTrackDisplayName = (track: Track) => {

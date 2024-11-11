@@ -42,44 +42,53 @@ export function Home() {
     const albumMap = new Map<string, Track[]>();
     
     tracks.forEach(track => {
-      // Extract album name and filename from S3 key
+      // Extract album name from first part of the path
       const keyParts = track.key.split('/');
-      let album: string;
-      let fileName: string;
+      const album = keyParts[0] || 'Unknown Album';
+      const fileName = keyParts[keyParts.length - 1]?.replace(/\.[^/.]+$/, '') || 'Unknown Track';
       
-      if (keyParts.length > 1) {
-        // If the key contains folders (e.g., "Album Name/track.mp3")
-        album = keyParts.slice(0, -1).join('/'); // Take all parts except the last one
-        fileName = keyParts[keyParts.length - 1].replace(/\.[^/.]+$/, ''); // Remove file extension
-      } else {
-        // If the key is just a file (e.g., "track.mp3")
-        album = 'Unknown Album';
-        fileName = keyParts[0].replace(/\.[^/.]+$/, '');
-      }
-      
-      // Create processed track with correct album property
+      console.debug('[Album Processing] Processing track:', {
+        key: track.key,
+        album,
+        fileName
+      });
+
+      // Create the processed track
       const processedTrack: Track = {
         ...track,
-        album: album,
-        fileName: fileName
+        album,
+        fileName
       };
       
+      // Add track to album map
       if (!albumMap.has(album)) {
         albumMap.set(album, []);
       }
       albumMap.get(album)!.push(processedTrack);
     });
+
+    // Debug: Log final album structure
+    console.debug('[Album Processing] Final albums:', 
+      Array.from(albumMap.entries()).map(([name, tracks]) => ({
+        name,
+        trackCount: tracks.length,
+        sampleTrack: tracks[0]?.key
+      }))
+    );
     
     return Array.from(albumMap.entries()).map(([name, tracks]) => ({
       name,
       tracks,
-      coverUrl: undefined
+      coverUrl: undefined // This will be handled in the next step
     }));
   }, [tracks]);
 
+  // Find current album based on current track
   const currentAlbum = useMemo(() => {
     if (!currentTrack || !albums) return null;
-    return albums.find(album => album.name === currentTrack.album) || null;
+    return albums.find(album => 
+      album.name.toLowerCase() === (currentTrack.album || '').toLowerCase()
+    ) || null;
   }, [currentTrack, albums]);
 
   // Set up loading timeout
@@ -137,10 +146,15 @@ export function Home() {
 
   const handleAlbumSelect = (album: Album) => {
     console.debug('[Album Selected]', {
-      name: album.name,
+      albumName: album.name,
       trackCount: album.tracks.length,
-      firstTrack: album.tracks[0]
+      sampleTracks: album.tracks.slice(0, 3).map(track => ({
+        key: track.key,
+        album: track.album,
+        fileName: track.fileName
+      }))
     });
+    
     setSelectedAlbum(album);
     setViewMode('list');
     if (album.tracks.length > 0) {
