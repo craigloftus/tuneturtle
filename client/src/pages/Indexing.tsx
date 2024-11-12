@@ -7,6 +7,20 @@ import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
 import { Progress } from "@/components/ui/progress";
+import { Track } from "@/types/aws";
+import { _Object, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { MetadataService } from "@/lib/services/MetadataService";
+
+// Supported audio formats and their MIME types
+const SUPPORTED_FORMATS = {
+  mp3: 'audio/mpeg',
+  flac: 'audio/flac',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  aac: 'audio/aac'
+} as const;
 
 export function Indexing() {
   const [, navigate] = useLocation();
@@ -14,13 +28,60 @@ export function Indexing() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
+  const metadataService = MetadataService.getInstance();
+
+  const isAudioFile = (fileName: string): boolean => {
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    return extension in SUPPORTED_FORMATS;
+  };
+
+  const getMimeType = (extension: string): string => {
+    return SUPPORTED_FORMATS[extension as keyof typeof SUPPORTED_FORMATS] || 'audio/mpeg';
+  };
+
+  const createTrackFromS3Object = async (
+    obj: _Object,
+    bucket: string,
+    client: S3Client
+  ): Promise<Track> => {
+    const key = obj.Key!;
+    const pathParts = key.split('/');
+    const fileName = pathParts[pathParts.length - 1];
+    const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
+    const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+    const mimeType = getMimeType(fileExtension);
+
+    const fullTrackCommand = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ResponseContentType: mimeType,
+    });
+    
+    const url = await getSignedUrl(client, fullTrackCommand, {
+      expiresIn: 3600
+    });
+
+    return {
+      key,
+      size: obj.Size || 0,
+      lastModified: obj.LastModified || new Date(),
+      url,
+      album,
+      fileName
+    };
+  };
 
   useEffect(() => {
     const startIndexing = async () => {
       setIsIndexing(true);
       try {
         const s3Service = S3Service.getInstance();
-        const result = await s3Service.listObjects({ limit: 100 });
+        const { s3Client, bucket } = await s3Service.getClientAndBucket();
+        const result = await s3Service.listObjects({ 
+          limit: 100,
+          isAudioFile,
+          createTrackFromS3Object: (obj) => createTrackFromS3Object(obj, bucket, s3Client)
+        });
         
         if (result.tracks.length === 0) {
           throw new Error("No music files found in the S3 bucket");

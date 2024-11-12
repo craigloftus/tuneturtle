@@ -7,17 +7,17 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { S3Credentials, Track } from "@/types/aws";
 import { CacheService } from "./CacheService";
-import { MetadataService } from "./MetadataService";
+// Removed MetadataService import
 
 export class S3Service {
   private static instance: S3Service;
   private s3Client: S3Client | null = null;
   private cacheService: CacheService;
-  private metadataService: MetadataService;
-  
+  // Removed MetadataService instance
+
   private constructor() {
     this.cacheService = CacheService.getInstance();
-    this.metadataService = MetadataService.getInstance();
+    // Removed metadataService initialization
   }
 
   public static getInstance(): S3Service {
@@ -55,42 +55,30 @@ export class S3Service {
     }
   }
 
-  private async createTrackFromS3Object(
-    obj: _Object,
-    bucket: string,
-    client: S3Client
-  ): Promise<Track> {
-    const key = obj.Key!;
-    const pathParts = key.split('/');
-    const fileName = pathParts[pathParts.length - 1];
-    const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
-    const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
-    const mimeType = this.metadataService.getMimeType(fileExtension);
+  public async getClientAndBucket(): Promise<{ s3Client: S3Client, bucket: string }> {
+    const credentials = this.cacheService.getCredentials();
+    if (!credentials) {
+      throw new Error('No AWS credentials found');
+    }
 
-    const fullTrackCommand = new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ResponseContentType: mimeType,
-    });
-    
-    const url = await getSignedUrl(client, fullTrackCommand, {
-      expiresIn: 3600
-    });
+    if (!this.s3Client) {
+      await this.initializeClient(credentials);
+    }
 
     return {
-      key,
-      size: obj.Size || 0,
-      lastModified: obj.LastModified || new Date(),
-      url,
-      album,
-      fileName
+      s3Client: this.s3Client!,
+      bucket: credentials.bucket
     };
   }
+
+  // Removed createTrackFromS3Object method
 
   public async listObjects(options: {
     continuationToken?: string;
     limit?: number;
-  } = {}): Promise<{
+    isAudioFile: (fileName: string) => boolean;
+    createTrackFromS3Object: (obj: _Object) => Promise<Track>;
+  }): Promise<{
     tracks: Track[];
     nextContinuationToken?: string;
     isTruncated: boolean;
@@ -99,7 +87,9 @@ export class S3Service {
   }> {
     const { 
       limit = 100,
-      continuationToken
+      continuationToken,
+      isAudioFile,
+      createTrackFromS3Object
     } = options;
 
     const credentials = this.cacheService.getCredentials();
@@ -121,10 +111,10 @@ export class S3Service {
       const response = await this.s3Client!.send(command);
       
       const audioFiles = (response.Contents || [])
-        .filter(obj => this.metadataService.isAudioFile(obj.Key || ''));
+        .filter(obj => isAudioFile(obj.Key || ''));
 
       const tracks = await Promise.all(
-        audioFiles.map(obj => this.createTrackFromS3Object(obj, credentials.bucket, this.s3Client!))
+        audioFiles.map(obj => createTrackFromS3Object(obj))
       );
 
       return {
