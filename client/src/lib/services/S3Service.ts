@@ -7,17 +7,14 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { S3Credentials, Track } from "@/types/aws";
 import { CacheService } from "./CacheService";
-// Removed MetadataService import
 
 export class S3Service {
   private static instance: S3Service;
   private s3Client: S3Client | null = null;
   private cacheService: CacheService;
-  // Removed MetadataService instance
 
   private constructor() {
     this.cacheService = CacheService.getInstance();
-    // Removed metadataService initialization
   }
 
   public static getInstance(): S3Service {
@@ -71,25 +68,17 @@ export class S3Service {
     };
   }
 
-  // Removed createTrackFromS3Object method
-
   public async listObjects(options: {
     continuationToken?: string;
     limit?: number;
-    isAudioFile: (fileName: string) => boolean;
-    createTrackFromS3Object: (obj: _Object) => Promise<Track>;
   }): Promise<{
-    tracks: Track[];
+    objects: Objects[];
     nextContinuationToken?: string;
     isTruncated: boolean;
-    totalFound: number;
-    maxKeys: number;
   }> {
     const { 
       limit = 100,
       continuationToken,
-      isAudioFile,
-      createTrackFromS3Object
     } = options;
 
     const credentials = this.cacheService.getCredentials();
@@ -109,20 +98,11 @@ export class S3Service {
       });
 
       const response = await this.s3Client!.send(command);
-      
-      const audioFiles = (response.Contents || [])
-        .filter(obj => isAudioFile(obj.Key || ''));
-
-      const tracks = await Promise.all(
-        audioFiles.map(obj => createTrackFromS3Object(obj))
-      );
 
       return {
-        tracks,
+        objects: (response.Contents || []),
         nextContinuationToken: response.NextContinuationToken,
         isTruncated: response.IsTruncated || false,
-        totalFound: response.KeyCount || tracks.length,
-        maxKeys: limit
       };
     } catch (error) {
       console.error('[S3Service] Error fetching tracks:', error);

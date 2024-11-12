@@ -4,18 +4,18 @@ import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { Grid, List, Settings } from "lucide-react";
+import { Grid, List, Settings, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { S3Service } from "@/lib/services/S3Service";
+import { CacheService } from "@/lib/services/CacheService";
 import { useToast } from "@/hooks/use-toast";
 
 export function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,19 +23,16 @@ export function Home() {
 
   useEffect(() => {
     const loadTracks = async () => {
-      try {
-        const s3Service = S3Service.getInstance();
-        const result = await s3Service.listObjects();
-        setTracks(result.tracks);
-      } catch (err) {
-        setError("Failed to load music library. Please check your settings.");
-        toast({
-          title: "Error",
-          description: (err as Error).message,
-          variant: "destructive",
-        });
-      } finally {
+      // Get tracks from cache
+      const cacheSerivce = CacheService.getInstance();
+      const cachedTracks = cacheSerivce.getTracks();
+      if (cachedTracks) {
+        setTracks(cachedTracks);
         setIsLoading(false);
+        return;
+      } else {
+        // route to indexing page
+        navigate("/indexing");
       }
     };
 
@@ -44,21 +41,23 @@ export function Home() {
 
   // Process tracks into albums
   const albums = tracks.reduce((acc, track) => {
-    const albumName = track.album || 'Unknown Album';
-    const existing = acc.find(a => a.name === albumName);
-    
+    const albumName = track.album || "Unknown Album";
+    const existing = acc.find((a) => a.name === albumName);
+
     if (existing) {
       existing.tracks.push(track);
     } else {
       acc.push({ name: albumName, tracks: [track], coverUrl: undefined });
     }
-    
+
     return acc;
   }, [] as Album[]);
 
   // Find current album based on current track
-  const currentAlbum = currentTrack 
-    ? albums.find(album => album.tracks.some(t => t.key === currentTrack.key))
+  const currentAlbum = currentTrack
+    ? albums.find((album) =>
+        album.tracks.some((t) => t.key === currentTrack.key),
+      )
     : null;
 
   if (error) {
@@ -99,16 +98,16 @@ export function Home() {
 
   const handleAlbumSelect = (album: Album) => {
     setSelectedAlbum(album);
-    setViewMode('list');
+    setViewMode("list");
   };
 
   const handleBackToGrid = () => {
-    setViewMode('grid');
+    setViewMode("grid");
     setSelectedAlbum(null);
   };
 
-  const currentIndex = currentTrack 
-    ? tracks.findIndex(t => t.key === currentTrack.key)
+  const currentIndex = currentTrack
+    ? tracks.findIndex((t) => t.key === currentTrack.key)
     : -1;
 
   const handleNext = () => {
@@ -128,26 +127,32 @@ export function Home() {
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center space-x-4">
           <h1 className="text-3xl font-bold">
-            {viewMode === 'list' && selectedAlbum 
+            {viewMode === "list" && selectedAlbum
               ? selectedAlbum.name
-              : 'Music Library'
-            }
+              : "Music Library"}
           </h1>
         </div>
         <div className="flex items-center space-x-2">
           <Button
-            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            variant={viewMode === "grid" ? "secondary" : "ghost"}
             size="icon"
-            onClick={() => setViewMode('grid')}
+            onClick={() => setViewMode("grid")}
           >
             <Grid className="h-4 w-4" />
           </Button>
           <Button
-            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            variant={viewMode === "list" ? "secondary" : "ghost"}
             size="icon"
-            onClick={() => setViewMode('list')}
+            onClick={() => setViewMode("list")}
           >
             <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/indexing")}
+            >
+            <RefreshCw className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
@@ -158,7 +163,7 @@ export function Home() {
           </Button>
         </div>
       </div>
-      
+
       <AnimatePresence mode="wait">
         <motion.div
           key={viewMode}
@@ -167,7 +172,7 @@ export function Home() {
           exit={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.2 }}
         >
-          {viewMode === 'grid' ? (
+          {viewMode === "grid" ? (
             <AlbumGrid
               albums={albums}
               onTrackSelect={handleAlbumSelect}
@@ -184,7 +189,7 @@ export function Home() {
           )}
         </motion.div>
       </AnimatePresence>
-      
+
       <AudioPlayer
         track={currentTrack}
         onNext={handleNext}

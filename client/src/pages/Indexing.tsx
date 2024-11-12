@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
+import { CacheService } from "@/lib/services/CacheService";
 import { Progress } from "@/components/ui/progress";
 import { Track } from "@/types/aws";
 import { _Object, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -14,12 +15,12 @@ import { MetadataService } from "@/lib/services/MetadataService";
 
 // Supported audio formats and their MIME types
 const SUPPORTED_FORMATS = {
-  mp3: 'audio/mpeg',
-  flac: 'audio/flac',
-  wav: 'audio/wav',
-  m4a: 'audio/mp4',
-  ogg: 'audio/ogg',
-  aac: 'audio/aac'
+  mp3: "audio/mpeg",
+  flac: "audio/flac",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+  aac: "audio/aac",
 } as const;
 
 export function Indexing() {
@@ -31,24 +32,28 @@ export function Indexing() {
   const metadataService = MetadataService.getInstance();
 
   const isAudioFile = (fileName: string): boolean => {
-    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    const extension = fileName.split(".").pop()?.toLowerCase() || "";
     return extension in SUPPORTED_FORMATS;
   };
 
   const getMimeType = (extension: string): string => {
-    return SUPPORTED_FORMATS[extension as keyof typeof SUPPORTED_FORMATS] || 'audio/mpeg';
+    return (
+      SUPPORTED_FORMATS[extension as keyof typeof SUPPORTED_FORMATS] ||
+      "audio/mpeg"
+    );
   };
 
   const createTrackFromS3Object = async (
     obj: _Object,
     bucket: string,
-    client: S3Client
+    client: S3Client,
   ): Promise<Track> => {
     const key = obj.Key!;
-    const pathParts = key.split('/');
+    const pathParts = key.split("/");
     const fileName = pathParts[pathParts.length - 1];
-    const album = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Unknown Album';
-    const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
+    const album =
+      pathParts.length > 1 ? pathParts[pathParts.length - 2] : "Unknown Album";
+    const fileExtension = fileName.split(".").pop()?.toLowerCase() || "";
     const mimeType = getMimeType(fileExtension);
 
     const fullTrackCommand = new GetObjectCommand({
@@ -56,9 +61,9 @@ export function Indexing() {
       Key: key,
       ResponseContentType: mimeType,
     });
-    
+
     const url = await getSignedUrl(client, fullTrackCommand, {
-      expiresIn: 3600
+      expiresIn: 3600,
     });
 
     return {
@@ -67,50 +72,69 @@ export function Indexing() {
       lastModified: obj.LastModified || new Date(),
       url,
       album,
-      fileName
+      fileName,
     };
   };
 
   useEffect(() => {
     const startIndexing = async () => {
+      // Check if S3 credentials are stored
+      const storedCredentials = CacheService.getInstance().getCredentials();
+      if (!storedCredentials) {
+        navigate("/setup");
+      }
+      
       setIsIndexing(true);
       try {
         const s3Service = S3Service.getInstance();
-        const { s3Client, bucket } = await s3Service.getClientAndBucket();
-        const result = await s3Service.listObjects({ 
-          limit: 100,
-          isAudioFile,
-          createTrackFromS3Object: (obj) => createTrackFromS3Object(obj, bucket, s3Client)
-        });
+        const cacheService = CacheService.getInstance();
         
-        if (result.tracks.length === 0) {
-          throw new Error("No music files found in the S3 bucket");
+        const { s3Client, bucket } = await s3Service.getClientAndBucket();
+        const tracks = [];
+
+        // Call listObjects continually until nextContinuationToken is null
+        let isTruncated = true;
+        let nextContinuationToken: string | null = null;
+        let maxKeys = 100;
+        
+        while (isTruncated) {
+          console.log("Fetching objects...");
+          const {
+            objects,
+            nextContinuationToken: nextToken,
+            isTruncated: truncated,
+          } = await s3Service.listObjects({
+            continuationToken: nextContinuationToken,
+            limit: maxKeys,
+          });
+
+          for (const obj of objects) {
+            const track = await createTrackFromS3Object(obj, bucket, s3Client);
+            tracks.push(track);
+          }
+
+          nextContinuationToken = nextToken;
+          isTruncated = truncated;
+
+          // sleep before fetching next batch of objects
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
-        // Simulate progress for better UX
-        const interval = setInterval(() => {
-          setProgress(prev => {
-            if (prev >= 90) {
-              clearInterval(interval);
-              return 90;
-            }
-            return prev + 10;
-          });
-        }, 500);
-
         // Final progress update
-        setProgress(100);
         toast({
           title: "Success",
-          description: `Found ${result.tracks.length} tracks in your music library`,
+          description: `Found ${tracks.length} tracks in your music library`,
         });
+
+        // Save tracks to cache
+        cacheService.saveTracks(tracks);
         
         // Small delay before navigation for better UX
-        setTimeout(() => navigate("/"), 1000);
+        setTimeout(() => navigate("/"), 5000);
       } catch (err) {
         setError(err as Error);
         toast({
-          title: "Error",
+          title: "Indexing Error",
           description: (err as Error).message,
           variant: "destructive",
         });
@@ -145,16 +169,10 @@ export function Indexing() {
             <InfoIcon className="h-5 w-5 text-blue-500" />
             <h2 className="text-2xl font-bold">Indexing Music Library</h2>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center justify-center">
               {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
-            </div>
-            <div className="space-y-2">
-              <Progress value={progress} className="w-full" />
-              <p className="text-sm text-muted-foreground text-center">
-                {progress}% Complete
-              </p>
             </div>
             <div className="text-center">
               <p className="text-muted-foreground">

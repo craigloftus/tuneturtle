@@ -10,25 +10,6 @@ export function Setup() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Check for stored credentials on component mount
-    const storedCredentials = checkStoredCredentials();
-    if (storedCredentials) {
-      validateS3Credentials(storedCredentials)
-        .then(() => {
-          toast({
-            title: "Success",
-            description: "Reconnected to S3 using stored credentials",
-          });
-          navigate("/indexing");
-        })
-        .catch(() => {
-          // Invalid stored credentials, continue with setup
-          console.warn("Stored credentials are invalid");
-        });
-    }
-  }, [navigate, toast]);
-
   const handleSubmit = async (data: S3Credentials) => {
     setIsLoading(true);
     try {
