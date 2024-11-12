@@ -25,7 +25,7 @@ export function Home() {
     const loadTracks = async () => {
       try {
         const s3Service = S3Service.getInstance();
-        const result = await s3Service.listObjects({ useCache: true });
+        const result = await s3Service.listObjects();
         setTracks(result.tracks);
       } catch (err) {
         setError("Failed to load music library. Please check your settings.");

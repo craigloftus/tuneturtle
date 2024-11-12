@@ -5,7 +5,7 @@ import {
   _Object
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { S3Credentials, Track, TrackMetadata } from "@/types/aws";
+import { S3Credentials, Track } from "@/types/aws";
 import { CacheService } from "./CacheService";
 import { MetadataService } from "./MetadataService";
 
@@ -48,7 +48,6 @@ export class S3Service {
       
       await client.send(command);
       this.cacheService.saveCredentials(credentials);
-      this.cacheService.clearTracksCache();
       return { success: true };
     } catch (error) {
       console.error('[S3Service] Validation error:', error);
@@ -91,7 +90,6 @@ export class S3Service {
   public async listObjects(options: {
     continuationToken?: string;
     limit?: number;
-    useCache?: boolean;
   } = {}): Promise<{
     tracks: Track[];
     nextContinuationToken?: string;
@@ -101,23 +99,8 @@ export class S3Service {
   }> {
     const { 
       limit = 100,
-      continuationToken,
-      useCache = true
+      continuationToken
     } = options;
-
-    // Check cache first
-    if (!continuationToken && useCache) {
-      const cachedData = this.cacheService.getTracksFromCache();
-      if (cachedData) {
-        return {
-          tracks: cachedData.tracks,
-          nextContinuationToken: cachedData.nextContinuationToken,
-          isTruncated: cachedData.isTruncated,
-          totalFound: cachedData.totalFound,
-          maxKeys: limit
-        };
-      }
-    }
 
     const credentials = this.cacheService.getCredentials();
     if (!credentials) {
@@ -143,15 +126,6 @@ export class S3Service {
       const tracks = await Promise.all(
         audioFiles.map(obj => this.createTrackFromS3Object(obj, credentials.bucket, this.s3Client!))
       );
-
-      if (!continuationToken) {
-        this.cacheService.updateTracksCache(
-          tracks,
-          response.NextContinuationToken,
-          response.IsTruncated || false,
-          response.KeyCount || tracks.length
-        );
-      }
 
       return {
         tracks,
