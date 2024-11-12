@@ -21,14 +21,14 @@ export function Indexing() {
       try {
         const s3Service = S3Service.getInstance();
         const result = await s3Service.listObjects({ limit: 100 });
-        
+
         if (result.tracks.length === 0) {
           throw new Error("No music files found in the S3 bucket");
         }
 
         // Simulate progress for better UX
         const interval = setInterval(() => {
-          setProgress(prev => {
+          setProgress((prev) => {
             if (prev >= 90) {
               clearInterval(interval);
               return 90;
@@ -43,7 +43,7 @@ export function Indexing() {
           title: "Success",
           description: `Found ${result.tracks.length} tracks in your music library`,
         });
-        
+
         // Small delay before navigation for better UX
         setTimeout(() => navigate("/"), 1000);
       } catch (err) {
@@ -84,7 +84,7 @@ export function Indexing() {
             <InfoIcon className="h-5 w-5 text-blue-500" />
             <h2 className="text-2xl font-bold">Indexing Music Library</h2>
           </div>
-          
+
           <div className="space-y-4">
             <div className="flex items-center justify-center">
               {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
