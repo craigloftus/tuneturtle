@@ -23,7 +23,6 @@ export function Home() {
 
   useEffect(() => {
     const loadTracks = async () => {
-      // Get tracks from cache
       const cacheSerivce = CacheService.getInstance();
       const cachedTracks = cacheSerivce.getTracks();
       if (cachedTracks) {
@@ -31,7 +30,6 @@ export function Home() {
         setIsLoading(false);
         return;
       } else {
-        // route to indexing page
         navigate("/indexing");
       }
     };
@@ -53,7 +51,6 @@ export function Home() {
     return acc;
   }, [] as Album[]);
 
-  // Find current album based on current track
   const currentAlbum = currentTrack
     ? albums.find((album) =>
         album.tracks.some((t) => t.key === currentTrack.key),
@@ -126,11 +123,16 @@ export function Home() {
     <div className="container mx-auto p-4 pb-32">
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center space-x-4">
-          <h1 className="text-3xl font-bold">
-            {viewMode === "list" && selectedAlbum
-              ? selectedAlbum.name
-              : "Music Library"}
-          </h1>
+          {viewMode === "list" && selectedAlbum ? (
+            <h1 className="text-3xl font-bold">{selectedAlbum.name}</h1>
+          ) : (
+            <img 
+              src="/Stylized Turtle Logo With _TuneTurtle_ Text in Teal.png"
+              alt="TuneTurtle"
+              className="h-10 w-auto transition-transform duration-200 hover:scale-105"
+              style={{ objectFit: 'contain' }}
+            />
+          )}
         </div>
         <div className="flex items-center space-x-2">
           <Button
@@ -151,7 +153,7 @@ export function Home() {
             variant="ghost"
             size="icon"
             onClick={() => navigate("/indexing")}
-            >
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button
