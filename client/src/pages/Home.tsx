@@ -126,12 +126,7 @@ export function Home() {
           {viewMode === "list" && selectedAlbum ? (
             <h1 className="text-3xl font-bold">{selectedAlbum.name}</h1>
           ) : (
-            <img 
-              src="/logo.svg"
-              alt="TuneTurtle"
-              className="h-10 w-auto transition-transform duration-200 hover:scale-105"
-              style={{ objectFit: 'contain' }}
-            />
+            <h1 className="text-3xl font-bold">TuneTurtle</h1>
           )}
         </div>
         <div className="flex items-center space-x-2">
