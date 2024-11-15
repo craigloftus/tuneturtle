@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { S3Setup } from "@/components/S3Setup";
-import { validateS3Credentials, checkStoredCredentials } from "@/lib/aws";
+import { validateS3Credentials } from "@/lib/aws";
 import { useToast } from "@/hooks/use-toast";
+import { Header } from "@/components/Header";
 import type { S3Credentials } from "@/types/aws";
 
 export function Setup() {
@@ -31,15 +32,21 @@ export function Setup() {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-3xl font-bold">Setup AWS S3</h1>
-        <p className="text-muted-foreground">
-          Configure your AWS S3 bucket to start streaming music.
-          Make sure you have the necessary IAM permissions set up.
-        </p>
-        
-        <S3Setup onSubmit={handleSubmit} isLoading={isLoading} />
+    <div className="flex flex-col min-h-screen">
+      <Header 
+        title="Setup AWS S3" 
+        showViewControls={false} 
+        showRefreshButton={false}
+      />
+      <div className="container mx-auto p-4">
+        <div className="max-w-2xl mx-auto space-y-6">
+          <p className="text-muted-foreground">
+            Configure your AWS S3 bucket to start streaming music.
+            Make sure you have the necessary IAM permissions set up.
+          </p>
+          
+          <S3Setup onSubmit={handleSubmit} isLoading={isLoading} />
+        </div>
       </div>
     </div>
   );
