@@ -1,12 +1,8 @@
 // This file is kept for maintaining types and interfaces
 export class AudioError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public originalError?: Error,
-  ) {
+  constructor(message: string, public code: string, public originalError?: Error) {
     super(message);
-    this.name = "AudioError";
+    this.name = 'AudioError';
   }
 }
 
@@ -52,7 +48,7 @@ export class AudioController {
       ended: this.audio.ended,
       readyState: this.audio.readyState,
       networkState: this.audio.networkState,
-      error: this.audio.error,
+      error: this.audio.error
     };
   }
 }
