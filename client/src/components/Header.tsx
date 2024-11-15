@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Grid, List, Settings, RefreshCw } from "lucide-react";
+import { Grid, List, Settings, RefreshCw, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface HeaderProps {
@@ -9,6 +9,8 @@ interface HeaderProps {
   showViewControls?: boolean;
   showSettingsButton?: boolean;
   showRefreshButton?: boolean;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
 export function Header({ 
@@ -17,27 +19,28 @@ export function Header({
   title,
   showViewControls = true,
   showSettingsButton = true,
-  showRefreshButton = true
+  showRefreshButton = true,
+  showBackButton = false,
+  onBack
 }: HeaderProps) {
   const [, navigate] = useLocation();
 
   return (
-    <div className="sticky top-0 flex justify-between items-center mb-8 p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 w-full border-b">
+    <div className="fixed top-0 left-0 right-0 flex justify-between items-center p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b">
       <div className="flex items-center space-x-4">
-        {title ? (
-          <h1 className="text-2xl font-bold">{title}</h1>
-        ) : (
-          <div className="flex items-center space-x-2">
-            <img 
-              src="/logo.svg"
-              alt="TuneTurtle"
-              className="h-10 w-auto transition-transform duration-200 hover:scale-105 cursor-pointer"
-              style={{ objectFit: 'contain' }}
-              onClick={() => navigate("/")}
-            />
-            <span className="text-xl font-bold">TuneTurtle</span>
-          </div>
+        {showBackButton && onBack && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBack}
+            className="mr-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
         )}
+        <h1 className="text-2xl font-bold">
+          {title || "TuneTurtle"}
+        </h1>
       </div>
       <div className="flex items-center space-x-2">
         {showViewControls && viewMode !== undefined && onViewModeChange && (
