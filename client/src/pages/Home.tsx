@@ -4,7 +4,7 @@ import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { Grid, List, Settings, RefreshCw } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -60,21 +60,27 @@ export function Home() {
 
   if (error) {
     return (
-      <div className="container mx-auto p-4">
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-        <Button onClick={() => navigate("/setup")} className="mt-4">
-          Go to Settings
-        </Button>
+      <div className="flex flex-col min-h-screen">
+        <Header showViewControls={false} />
+        <div className="container mx-auto p-4 mt-16">
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button onClick={() => navigate("/setup")} className="mt-4">
+            Go to Settings
+          </Button>
+        </div>
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-4 text-center">
-        <p className="text-muted-foreground">Loading your music library...</p>
+      <div className="flex flex-col min-h-screen">
+        <Header showViewControls={false} />
+        <div className="container mx-auto p-4 mt-16 text-center">
+          <p className="text-muted-foreground">Loading your music library...</p>
+        </div>
       </div>
     );
   }
@@ -123,14 +129,25 @@ export function Home() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
-        title={selectedAlbum?.name || "TuneTurtle"}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        showBackButton={!!selectedAlbum}
-        onBack={handleBackToGrid}
       />
       
-      <div className="container mx-auto p-4 pb-32 mt-16">
+      {selectedAlbum && (
+        <div className="mt-16 px-4 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleBackToGrid}
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h2 className="text-xl font-semibold truncate">{selectedAlbum.name}</h2>
+        </div>
+      )}
+      
+      <div className="container mx-auto p-4 pb-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={viewMode}

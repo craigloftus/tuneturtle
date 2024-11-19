@@ -151,19 +151,21 @@ export function Indexing() {
     return (
       <div className="flex flex-col min-h-screen">
         <Header 
-          title="Indexing Error"
           showViewControls={false}
           showRefreshButton={false}
         />
-        <div className="container mx-auto p-4 mt-16">
-          <Alert variant="destructive">
-            <AlertDescription>
-              Failed to index music library: {error.message}
-            </AlertDescription>
-          </Alert>
-          <Button onClick={() => navigate("/setup")} className="mt-4">
-            Back to Setup
-          </Button>
+        <div className="mt-16 px-4">
+          <h2 className="text-2xl font-bold mb-4">Indexing Error</h2>
+          <div className="container mx-auto p-4">
+            <Alert variant="destructive">
+              <AlertDescription>
+                Failed to index music library: {error.message}
+              </AlertDescription>
+            </Alert>
+            <Button onClick={() => navigate("/setup")} className="mt-4">
+              Back to Setup
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -172,30 +174,32 @@ export function Indexing() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
-        title="Indexing Music Library"
         showViewControls={false}
         showRefreshButton={false}
       />
-      <div className="container mx-auto p-4 mt-16">
-        <Card className="p-6 max-w-2xl mx-auto">
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2">
-              <InfoIcon className="h-5 w-5 text-blue-500" />
-              <h2 className="text-2xl font-bold">Indexing in Progress</h2>
-            </div>
+      <div className="mt-16 px-4">
+        <h2 className="text-2xl font-bold mb-4">Indexing Music Library</h2>
+        <div className="container mx-auto p-4">
+          <Card className="p-6 max-w-2xl mx-auto">
+            <div className="space-y-6">
+              <div className="flex items-center space-x-2">
+                <InfoIcon className="h-5 w-5 text-blue-500" />
+                <h3 className="text-xl font-semibold">Indexing in Progress</h3>
+              </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-center">
-                {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
-              </div>
-              <div className="text-center">
-                <p className="text-muted-foreground">
-                  Please wait while we index your music library...
-                </p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-center">
+                  {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
+                </div>
+                <div className="text-center">
+                  <p className="text-muted-foreground">
+                    Please wait while we index your music library...
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );
