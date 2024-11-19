@@ -93,7 +93,7 @@ export function Home() {
 
   if (!tracks.length) {
     return (
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto p-6 mt-20">
         <Alert>
           <AlertDescription>
             No music tracks found. Please complete the setup process first.
@@ -116,6 +116,13 @@ export function Home() {
     setSelectedAlbum(null);
   };
 
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode === "grid") {
+      setSelectedAlbum(null);
+    }
+  };
+
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.key === currentTrack.key)
     : -1;
@@ -136,7 +143,7 @@ export function Home() {
     <div className="flex flex-col min-h-screen">
       <Header 
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
       />
       
       {selectedAlbum && (

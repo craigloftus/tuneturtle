@@ -154,18 +154,16 @@ export function Indexing() {
           showViewControls={false}
           showRefreshButton={false}
         />
-        <div className="mt-16 px-4">
+        <div className="container mx-auto p-6 mt-20">
           <h2 className="text-2xl font-bold mb-4">Indexing Error</h2>
-          <div className="container mx-auto p-4">
-            <Alert variant="destructive">
-              <AlertDescription>
-                Failed to index music library: {error.message}
-              </AlertDescription>
-            </Alert>
-            <Button onClick={() => navigate("/setup")} className="mt-4">
-              Back to Setup
-            </Button>
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>
+              Failed to index music library: {error.message}
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => navigate("/setup")} className="mt-4">
+            Back to Setup
+          </Button>
         </div>
       </div>
     );
@@ -177,29 +175,27 @@ export function Indexing() {
         showViewControls={false}
         showRefreshButton={false}
       />
-      <div className="mt-16 px-4">
+      <div className="container mx-auto p-6 mt-20">
         <h2 className="text-2xl font-bold mb-4">Indexing Music Library</h2>
-        <div className="container mx-auto p-4">
-          <Card className="p-6 max-w-2xl mx-auto">
-            <div className="space-y-6">
-              <div className="flex items-center space-x-2">
-                <InfoIcon className="h-5 w-5 text-blue-500" />
-                <h3 className="text-xl font-semibold">Indexing in Progress</h3>
-              </div>
+        <Card className="p-6 max-w-2xl mx-auto">
+          <div className="space-y-6">
+            <div className="flex items-center space-x-2">
+              <InfoIcon className="h-5 w-5 text-blue-500" />
+              <h3 className="text-xl font-semibold">Indexing in Progress</h3>
+            </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-center">
-                  {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
-                </div>
-                <div className="text-center">
-                  <p className="text-muted-foreground">
-                    Please wait while we index your music library...
-                  </p>
-                </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-center">
+                {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
+              </div>
+              <div className="text-center">
+                <p className="text-muted-foreground">
+                  Please wait while we index your music library...
+                </p>
               </div>
             </div>
-          </Card>
-        </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

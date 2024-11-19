@@ -37,17 +37,15 @@ export function Setup() {
         showViewControls={false} 
         showRefreshButton={false}
       />
-      <div className="mt-16 px-4">
-        <h2 className="text-2xl font-bold mb-4">Setup AWS S3</h2>
-        <div className="container mx-auto p-4">
-          <div className="max-w-2xl mx-auto space-y-6">
-            <p className="text-muted-foreground">
-              Configure your AWS S3 bucket to start streaming music.
-              Make sure you have the necessary IAM permissions set up.
-            </p>
-            
-            <S3Setup onSubmit={handleSubmit} isLoading={isLoading} />
-          </div>
+      <div className="container mx-auto p-6 mt-20">
+        <div className="max-w-2xl mx-auto space-y-6">
+          <h2 className="text-2xl font-bold mb-4">Setup AWS S3</h2>
+          <p className="text-muted-foreground">
+            Configure your AWS S3 bucket to start streaming music.
+            Make sure you have the necessary IAM permissions set up.
+          </p>
+          
+          <S3Setup onSubmit={handleSubmit} isLoading={isLoading} />
         </div>
       </div>
     </div>
