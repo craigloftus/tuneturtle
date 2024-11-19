@@ -16,20 +16,26 @@ export function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const cached = localStorage.getItem("viewMode");
+    return (cached as ViewMode) || "grid";
+  });
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    localStorage.setItem("viewMode", viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
     const loadTracks = async () => {
-      const cacheSerivce = CacheService.getInstance();
-      const cachedTracks = cacheSerivce.getTracks();
+      const cacheService = CacheService.getInstance();
+      const cachedTracks = cacheService.getTracks();
       if (cachedTracks) {
         setTracks(cachedTracks);
         setIsLoading(false);
-        return;
       } else {
         navigate("/indexing");
       }
@@ -38,7 +44,7 @@ export function Home() {
     loadTracks();
   }, [toast]);
 
-  // Process tracks into albums
+  // Process tracks into albums with improved organization
   const albums = tracks.reduce((acc, track) => {
     const albumName = track.album || "Unknown Album";
     const existing = acc.find((a) => a.name === albumName);
@@ -62,7 +68,7 @@ export function Home() {
     return (
       <div className="flex flex-col min-h-screen">
         <Header showViewControls={false} />
-        <div className="container mx-auto p-4 mt-16">
+        <div className="container mx-auto p-6 mt-20">
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
@@ -78,7 +84,7 @@ export function Home() {
     return (
       <div className="flex flex-col min-h-screen">
         <Header showViewControls={false} />
-        <div className="container mx-auto p-4 mt-16 text-center">
+        <div className="container mx-auto p-6 mt-20 text-center">
           <p className="text-muted-foreground">Loading your music library...</p>
         </div>
       </div>
@@ -87,7 +93,7 @@ export function Home() {
 
   if (!tracks.length) {
     return (
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-6">
         <Alert>
           <AlertDescription>
             No music tracks found. Please complete the setup process first.
@@ -134,12 +140,12 @@ export function Home() {
       />
       
       {selectedAlbum && (
-        <div className="mt-16 px-4 flex items-center gap-2">
+        <div className="mt-20 px-6 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleBackToGrid}
-            className="shrink-0"
+            className="shrink-0 hover:bg-muted"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -147,7 +153,7 @@ export function Home() {
         </div>
       )}
       
-      <div className="container mx-auto p-4 pb-32">
+      <div className="container mx-auto px-6 pb-32 mt-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={viewMode}
