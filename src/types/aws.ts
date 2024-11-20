@@ -24,7 +24,6 @@ export interface Track {
   key: string;
   size: number;
   lastModified: Date;
-  url: string;
   album: string;
   fileName: string;
   metadata?: TrackMetadata;

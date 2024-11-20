@@ -8,40 +8,17 @@ import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
 import { CacheService } from "@/lib/services/CacheService";
 import { Track } from "@/types/aws";
-import { _Object, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { _Object, S3Client } from "@aws-sdk/client-s3";
 import { MetadataService } from "@/lib/services/MetadataService";
 import { Header } from "@/components/Header";
 
-// Supported audio formats and their MIME types
-const SUPPORTED_FORMATS = {
-  mp3: "audio/mpeg",
-  flac: "audio/flac",
-  wav: "audio/wav",
-  m4a: "audio/mp4",
-  ogg: "audio/ogg",
-  aac: "audio/aac",
-} as const;
 
 export function Indexing() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isIndexing, setIsIndexing] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
   const metadataService = MetadataService.getInstance();
-
-  const isAudioFile = (fileName: string): boolean => {
-    const extension = fileName.split(".").pop()?.toLowerCase() || "";
-    return extension in SUPPORTED_FORMATS;
-  };
-
-  const getMimeType = (extension: string): string => {
-    return (
-      SUPPORTED_FORMATS[extension as keyof typeof SUPPORTED_FORMATS] ||
-      "audio/mpeg"
-    );
-  };
 
   const createTrackFromS3Object = async (
     obj: _Object,
@@ -53,24 +30,11 @@ export function Indexing() {
     const fileName = pathParts[pathParts.length - 1];
     const album =
       pathParts.length > 1 ? pathParts[pathParts.length - 2] : "Unknown Album";
-    const fileExtension = fileName.split(".").pop()?.toLowerCase() || "";
-    const mimeType = getMimeType(fileExtension);
-
-    const fullTrackCommand = new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      ResponseContentType: mimeType,
-    });
-
-    const url = await getSignedUrl(client, fullTrackCommand, {
-      expiresIn: 3600,
-    });
 
     return {
       key,
       size: obj.Size || 0,
       lastModified: obj.LastModified || new Date(),
-      url,
       album,
       fileName,
     };
@@ -117,7 +81,7 @@ export function Indexing() {
           isTruncated = truncated;
 
           // sleep before fetching next batch of objects
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 250));
         }
 
         // Final progress update
@@ -130,7 +94,7 @@ export function Indexing() {
         cacheService.saveTracks(tracks);
 
         // Small delay before navigation for better UX
-        setTimeout(() => navigate("/"), 5000);
+        setTimeout(() => navigate("/"), 1000);
       } catch (err) {
         setError(err as Error);
         toast({
