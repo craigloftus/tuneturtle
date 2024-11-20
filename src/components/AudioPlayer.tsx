@@ -63,19 +63,6 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       if (onNext) onNext();
     };
 
-    // Add format-specific handling if needed
-    const fileExtension = track.fileName.split('.').pop()?.toLowerCase();
-    if (fileExtension) {
-      audio.type = {
-        mp3: 'audio/mpeg',
-        flac: 'audio/flac',
-        wav: 'audio/wav',
-        m4a: 'audio/mp4',
-        ogg: 'audio/ogg',
-        aac: 'audio/aac'
-      }[fileExtension] || 'audio/mpeg';
-    }
-
     audio.addEventListener('error', handleError as EventListener);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);

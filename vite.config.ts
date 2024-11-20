@@ -4,15 +4,12 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    host: "0.0.0.0",
+  },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "client", "src"),
-      db: path.resolve(__dirname, "db"),
+      "@": path.resolve(__dirname, "src"),
     },
-  },
-  root: path.resolve(__dirname, "client"),
-  build: {
-    outDir: path.resolve(__dirname, "dist/public"),
-    emptyOutDir: true,
   },
 });

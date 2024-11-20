@@ -173,7 +173,6 @@ export function Home() {
               <AlbumGrid
                 albums={albums}
                 onTrackSelect={handleAlbumSelect}
-                currentAlbum={currentAlbum}
               />
             ) : (
               <TrackList

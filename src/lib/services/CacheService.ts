@@ -1,4 +1,4 @@
-import { S3Credentials } from "@/types/aws";
+import { S3Credentials, Track } from "@/types/aws";
 
 export class CacheService {
   private static instance: CacheService;

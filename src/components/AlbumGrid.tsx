@@ -1,23 +1,19 @@
 import { Album } from "@/types/aws";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, Music } from "lucide-react";
 
 interface AlbumGridProps {
   albums: Album[];
   onTrackSelect: (album: Album) => void;
-  currentAlbum: Album | null;
 }
 
-export function AlbumGrid({ albums, onTrackSelect, currentAlbum }: AlbumGridProps) {
+export function AlbumGrid({ albums, onTrackSelect }: AlbumGridProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
       {albums.map((album) => (
         <Card
           key={album.name}
-          className={`group relative overflow-hidden transition-all hover:scale-105 ${
-            currentAlbum?.name === album.name ? 'ring-2 ring-primary' : ''
-          }`}
+          className="group relative overflow-hidden transition-all hover:scale-105"
         >
           <Button
             variant="ghost"

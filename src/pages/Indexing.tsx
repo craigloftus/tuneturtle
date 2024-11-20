@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
 import { CacheService } from "@/lib/services/CacheService";
-import { Progress } from "@/components/ui/progress";
 import { Track } from "@/types/aws";
 import { _Object, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -84,20 +83,20 @@ export function Indexing() {
       if (!storedCredentials) {
         navigate("/setup");
       }
-      
+
       setIsIndexing(true);
       try {
         const s3Service = S3Service.getInstance();
         const cacheService = CacheService.getInstance();
-        
+
         const { s3Client, bucket } = await s3Service.getClientAndBucket();
         const tracks = [];
 
         // Call listObjects continually until nextContinuationToken is null
         let isTruncated = true;
-        let nextContinuationToken: string | null = null;
+        let nextContinuationToken: string | undefined = undefined;
         let maxKeys = 100;
-        
+
         while (isTruncated) {
           console.log("Fetching objects...");
           const {
@@ -129,7 +128,7 @@ export function Indexing() {
 
         // Save tracks to cache
         cacheService.saveTracks(tracks);
-        
+
         // Small delay before navigation for better UX
         setTimeout(() => navigate("/"), 5000);
       } catch (err) {
@@ -150,10 +149,7 @@ export function Indexing() {
   if (error) {
     return (
       <div className="flex flex-col min-h-screen">
-        <Header 
-          showViewControls={false}
-          showRefreshButton={false}
-        />
+        <Header showViewControls={false} showRefreshButton={false} />
         <div className="container mx-auto p-6 mt-20">
           <h2 className="text-2xl font-bold mb-4">Indexing Error</h2>
           <Alert variant="destructive">
@@ -171,10 +167,7 @@ export function Indexing() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header 
-        showViewControls={false}
-        showRefreshButton={false}
-      />
+      <Header showViewControls={false} showRefreshButton={false} />
       <div className="container mx-auto p-6 mt-3">
         <Card className="p-6 max-w-2xl mx-auto">
           <div className="space-y-6">

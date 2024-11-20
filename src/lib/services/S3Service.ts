@@ -1,11 +1,9 @@
 import { 
   S3Client, 
-  ListObjectsV2Command, 
-  GetObjectCommand,
+  ListObjectsV2Command,
   _Object
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { S3Credentials, Track } from "@/types/aws";
+import { S3Credentials } from "@/types/aws";
 import { CacheService } from "./CacheService";
 
 export class S3Service {
@@ -72,7 +70,7 @@ export class S3Service {
     continuationToken?: string;
     limit?: number;
   }): Promise<{
-    objects: Objects[];
+    objects: _Object[];
     nextContinuationToken?: string;
     isTruncated: boolean;
   }> {
