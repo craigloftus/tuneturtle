@@ -5,6 +5,8 @@ import { validateS3Credentials } from "@/lib/aws";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
 import type { S3Credentials } from "@/types/aws";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export function Setup() {
   const [isLoading, setIsLoading] = useState(false);
@@ -36,10 +38,22 @@ export function Setup() {
       <Header 
         showViewControls={false} 
         showRefreshButton={false}
+        showSettingsButton={false}
       />
-      <div className="container mx-auto p-6 mt-20">
+      <div className="container mx-auto p-6 mt-3">
         <div className="max-w-2xl mx-auto space-y-6">
-          <h2 className="text-2xl font-bold mb-4">Setup AWS S3</h2>
+          
+          <div className="flex items-center mb-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/")}
+              className="shrink-0 hover:bg-muted"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <h2 className="text-2xl font-bold">Setup AWS S3</h2>
+          </div>
           <p className="text-muted-foreground">
             Configure your AWS S3 bucket to start streaming music.
             Make sure you have the necessary IAM permissions set up.

@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Grid, List, Settings, RefreshCw } from "lucide-react";
+import { Grid, Settings, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -27,7 +27,7 @@ export function Header({
 
   return (
     <TooltipProvider>
-      <div className="fixed top-0 left-0 right-0 flex justify-between items-center px-6 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b">
+      <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-6 py-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b">
         <div className="flex items-center">
           <h1 className="text-2xl font-bold tracking-tight hover:text-primary transition-colors cursor-pointer" onClick={() => navigate("/")}>
             TuneTurtle
@@ -48,20 +48,6 @@ export function Header({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Grid View</TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === "list" ? "secondary" : "ghost"}
-                    size="icon"
-                    onClick={() => onViewModeChange("list")}
-                    className="hover:bg-muted"
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>List View</TooltipContent>
               </Tooltip>
             </>
           )}

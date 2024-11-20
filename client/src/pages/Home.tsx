@@ -93,7 +93,7 @@ export function Home() {
 
   if (!tracks.length) {
     return (
-      <div className="container mx-auto p-6 mt-20">
+      <div className="container mx-auto p-6">
         <Alert>
           <AlertDescription>
             No music tracks found. Please complete the setup process first.
@@ -147,7 +147,7 @@ export function Home() {
       />
       
       {selectedAlbum && (
-        <div className="mt-20 px-6 flex items-center gap-3">
+        <div className="mt-3 px-6 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
