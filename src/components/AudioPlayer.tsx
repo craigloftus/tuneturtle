@@ -187,7 +187,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
   return (
     <Card className="p-4 fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t">
-      <audio ref={audioRef} preload="metadata" />
+      <audio ref={audioRef} preload="metadata" autoPlay />
 
       {error && (
         <Alert variant="destructive" className="mb-4">
