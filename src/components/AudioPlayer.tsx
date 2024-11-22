@@ -1,19 +1,26 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, SkipForward, SkipBack, Volume2, AlertCircle, RefreshCw } from "lucide-react";
-import { Track } from '@/types/aws';
+import {
+  Play,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Volume2,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
+import { Track } from "@/types/aws";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { S3Service } from '@/lib/services/S3Service';
+import { S3Service } from "@/lib/services/S3Service";
 
 interface AudioPlayerProps {
   track: Track | null;
   onNext?: () => void;
   onPrevious?: () => void;
 }
-
 
 const s3Service = S3Service.getInstance();
 
@@ -28,22 +35,21 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const { toast } = useToast();
 
   useEffect(() => {
-    
-    
     const audio = audioRef.current;
     if (!audio || !track) return;
 
     const handleError = (e: ErrorEvent) => {
-      let errorMessage = 'Unable to access or play audio file.';
-      
+      let errorMessage = "Unable to access or play audio file.";
+
       // Handle format-specific errors
-      if (e.message.includes('MEDIA_ERR_SRC_NOT_SUPPORTED')) {
-        const format = track.fileName.split('.').pop()?.toUpperCase() || 'Unknown';
+      if (e.message.includes("MEDIA_ERR_SRC_NOT_SUPPORTED")) {
+        const format =
+          track.fileName.split(".").pop()?.toUpperCase() || "Unknown";
         errorMessage = `This browser doesn't support ${format} format. Try converting to MP3.`;
-      } else if (e.message.includes('MEDIA_ERR_DECODE')) {
-        errorMessage = 'Audio file is corrupted or in an unsupported format.';
-      } else if (e.message.includes('MEDIA_ERR_NETWORK')) {
-        errorMessage = 'Network error while loading the audio file.';
+      } else if (e.message.includes("MEDIA_ERR_DECODE")) {
+        errorMessage = "Audio file is corrupted or in an unsupported format.";
+      } else if (e.message.includes("MEDIA_ERR_NETWORK")) {
+        errorMessage = "Network error while loading the audio file.";
       }
 
       setError(errorMessage);
@@ -68,11 +74,21 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       if (onNext) onNext();
     };
 
-    audio.addEventListener('error', handleError as EventListener);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-    
+    const handlePlay = () => {
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
+    audio.addEventListener("error", handleError as EventListener);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+
     const loadTrack = async () => {
       audio.src = await s3Service.getSignedUrl(track.key);
       audio.load();
@@ -81,10 +97,12 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     loadTrack();
 
     return () => {
-      audio.removeEventListener('error', handleError as EventListener);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener("error", handleError as EventListener);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
     };
   }, [track, onNext, toast]);
 
@@ -105,14 +123,14 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
     try {
       setError(null);
-      if (isPlaying) {
+
+      if (!audio.paused) {
         audio.pause();
       } else {
         await audio.play();
       }
-      setIsPlaying(!isPlaying);
     } catch (err) {
-      const errorMessage = 'Unable to play audio. Please try again.';
+      const errorMessage = "Unable to play audio. Please try again.";
       console.error(errorMessage, err);
       setError(errorMessage);
       setIsPlaying(false);
@@ -132,7 +150,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       audio.currentTime = value[0];
       setCurrentTime(value[0]);
     } catch (err) {
-      console.error('Seek error:', err);
+      console.error("Seek error:", err);
       toast({
         variant: "destructive",
         title: "Seek Error",
@@ -150,7 +168,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       audio.volume = newVolume;
       setVolume(newVolume);
     } catch (err) {
-      console.error('Volume control error:', err);
+      console.error("Volume control error:", err);
       toast({
         variant: "destructive",
         title: "Volume Control Error",
@@ -162,7 +180,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const formatTime = (time: number) => {
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   if (!track) return null;
@@ -170,7 +188,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   return (
     <Card className="p-4 fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t">
       <audio ref={audioRef} preload="metadata" />
-      
+
       {error && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
@@ -183,13 +201,15 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
               disabled={isRetrying}
               className="ml-2"
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRetrying ? 'animate-spin' : ''}`} />
-              {isRetrying ? 'Retrying...' : 'Retry'}
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${isRetrying ? "animate-spin" : ""}`}
+              />
+              {isRetrying ? "Retrying..." : "Retry"}
             </Button>
           </AlertDescription>
         </Alert>
       )}
-      
+
       <div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
@@ -209,7 +229,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
             />
           </div>
         </div>
-        
+
         <div className="space-y-2">
           <Slider
             value={[currentTime]}
@@ -226,7 +246,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
             >
               <SkipBack className="h-4 w-4" />
             </Button>
-            
+
             <Button
               variant="outline"
               size="icon"
@@ -239,7 +259,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
                 <Play className="h-4 w-4" />
               )}
             </Button>
-            
+
             <Button
               variant="ghost"
               size="icon"
