@@ -32,6 +32,13 @@ export function Home() {
   useEffect(() => {
     const loadTracks = async () => {
       const cacheService = CacheService.getInstance();
+      
+      // Check if S3 credentials are stored
+      const storedCredentials = cacheService.getCredentials();
+      if (!storedCredentials) {
+        navigate("/setup");
+      }
+      
       const cachedTracks = cacheService.getTracks();
       if (cachedTracks) {
         setTracks(cachedTracks);

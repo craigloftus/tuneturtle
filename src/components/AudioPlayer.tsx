@@ -7,8 +7,6 @@ import { Track } from '@/types/aws';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from '@/lib/services/S3Service';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 interface AudioPlayerProps {
   track: Track | null;
@@ -16,40 +14,8 @@ interface AudioPlayerProps {
   onPrevious?: () => void;
 }
 
-// Supported audio formats and their MIME types
-const SUPPORTED_FORMATS = {
-  mp3: "audio/mpeg",
-  flac: "audio/flac",
-  wav: "audio/wav",
-  m4a: "audio/mp4",
-  ogg: "audio/ogg",
-  aac: "audio/aac",
-} as const;
-
-const getMimeType = (extension: string): string => {
-  return (
-    SUPPORTED_FORMATS[extension as keyof typeof SUPPORTED_FORMATS] ||
-    "audio/mpeg"
-  );
-};
 
 const s3Service = S3Service.getInstance();
-const { s3Client, bucket } = await s3Service.getClientAndBucket();
-
-const getTrackUrl = async (track: Track) => {
-  const fileExtension = track.key.split(".").pop()?.toLowerCase() || "";
-  const mimeType = getMimeType(fileExtension);
-
-  const fullTrackCommand = new GetObjectCommand({
-    Bucket: bucket,
-    Key: track.key,
-    ResponseContentType: mimeType,
-  });
-
-  return getSignedUrl(s3Client, fullTrackCommand, {
-    expiresIn: 3600,
-  });
-}
 
 export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -62,6 +28,8 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const { toast } = useToast();
 
   useEffect(() => {
+    
+    
     const audio = audioRef.current;
     if (!audio || !track) return;
 
@@ -106,7 +74,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     audio.addEventListener('ended', handleEnded);
     
     const loadTrack = async () => {
-      audio.src = await getTrackUrl(track);
+      audio.src = await s3Service.getSignedUrl(track.key);
       audio.load();
     };
 
@@ -126,7 +94,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
     setIsRetrying(true);
     setError(null);
-    audio.src = await getTrackUrl(track);
+    audio.src = await s3Service.getSignedUrl(track.key);
     audio.load();
     setIsRetrying(false);
   };

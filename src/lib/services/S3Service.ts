@@ -5,6 +5,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { S3Credentials } from "@/types/aws";
 import { CacheService } from "./CacheService";
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl as s3GetSignedUrl } from '@aws-sdk/s3-request-presigner';
+
 
 export class S3Service {
   private static instance: S3Service;
@@ -66,6 +69,19 @@ export class S3Service {
     };
   }
 
+  public async getSignedUrl(key: string) {
+    const { s3Client, bucket } = await this.getClientAndBucket();
+
+    const objectCommand = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    });
+
+    return s3GetSignedUrl(s3Client, objectCommand, {
+      expiresIn: 3600,
+    });
+  }
+  
   public async listObjects(options: {
     continuationToken?: string;
     limit?: number;
