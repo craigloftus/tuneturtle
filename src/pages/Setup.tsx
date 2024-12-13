@@ -21,7 +21,7 @@ export function Setup() {
         title: "Success",
         description: "Successfully connected to S3",
       });
-      navigate("/indexing");
+      navigate("/");
     } catch (error) {
       toast({
         title: "Error",

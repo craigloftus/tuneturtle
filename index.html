@@ -3,9 +3,112 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      #splash-screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(to bottom right, #059669, #0d9488);
+        opacity: 1;
+        transition: opacity 0.3s ease-in-out;
+        z-index: 9999;
+      }
+      #splash-screen.fade-out {
+        opacity: 0;
+      }
+      .splash-content {
+        text-align: center;
+        color: white;
+      }
+      .splash-title {
+        font-size: 4rem;
+        font-weight: bold;
+        letter-spacing: -0.025em;
+        line-height: 1;
+      }
+      .splash-title span:first-child {
+        color: #34d399;
+      }
+      .splash-title span:last-child {
+        color: #6ee7b7;
+      }
+      .setup-button {
+        margin-top: 2rem;
+        padding: 0.75rem 1.5rem;
+        background-color: #34d399;
+        color: white;
+        border: none;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        display: none;
+      }
+      .setup-button:hover {
+        background-color: #10b981;
+      }
+      .turtle-pattern {
+        position: absolute;
+        inset: 0;
+        opacity: 0.1;
+        pointer-events: none;
+        background-image: radial-gradient(circle at center, rgba(255,255,255,0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+    </style>
   </head>
   <body>
+    <div id="splash-screen">
+      <div class="turtle-pattern"></div>
+      <div class="splash-content">
+        <h1 class="splash-title">
+          <span>Tune</span><span>Turtle</span>
+        </h1>
+        <button class="setup-button">Setup Your Music Library</button>
+      </div>
+    </div>
     <div id="root"></div>
+    <script>
+      // Check for existing credentials
+      const checkCredentials = () => {
+        try {
+          const credentials = localStorage.getItem('aws:credentials');
+          return !!credentials;
+        } catch {
+          return false;
+        }
+      };
+
+      // Handle the splash screen visibility
+      const handleSplashScreen = () => {
+        const splashScreen = document.getElementById('splash-screen');
+        const setupButton = document.querySelector('.setup-button');
+        const hasCredentials = checkCredentials();
+
+        if (!hasCredentials) {
+          setupButton.style.display = 'inline-block';
+          setupButton.addEventListener('click', () => {
+            window.location.href = '/setup';
+          });
+        } else {
+          // If we have credentials, wait for React to load then fade out
+          const checkReactLoaded = setInterval(() => {
+            if (document.querySelector('#root').children.length > 0) {
+              clearInterval(checkReactLoaded);
+              splashScreen.classList.add('fade-out');
+              setTimeout(() => {
+                splashScreen.style.display = 'none';
+              }, 300);
+            }
+          }, 100);
+        }
+      };
+
+      // Initialize splash screen behavior
+      handleSplashScreen();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
