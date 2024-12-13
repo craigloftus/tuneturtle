@@ -87,6 +87,13 @@
         const splashScreen = document.getElementById('splash-screen');
         const setupButton = document.querySelector('.setup-button');
         const hasCredentials = checkCredentials();
+        const currentPath = window.location.pathname;
+
+        // Hide splash screen immediately for non-root routes
+        if (currentPath !== '/') {
+          splashScreen.style.display = 'none';
+          return;
+        }
 
         if (!hasCredentials) {
           setupButton.style.display = 'inline-block';
