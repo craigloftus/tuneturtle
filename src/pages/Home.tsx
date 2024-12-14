@@ -22,7 +22,6 @@ export function Home() {
   });
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,18 +32,9 @@ export function Home() {
     const loadTracks = async () => {
       const cacheService = CacheService.getInstance();
       
-      // Check if S3 credentials are stored
-      const storedCredentials = cacheService.getCredentials();
-      if (!storedCredentials) {
-        navigate("/setup");
-      }
-      
       const cachedTracks = cacheService.getTracks();
       if (cachedTracks) {
         setTracks(cachedTracks);
-        setIsLoading(false);
-      } else {
-        navigate("/indexing");
       }
     };
 
@@ -83,32 +73,6 @@ export function Home() {
             Go to Settings
           </Button>
         </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        <Header showViewControls={false} />
-        <div className="container mx-auto p-6 mt-20 text-center">
-          <p className="text-muted-foreground">Loading your music library...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!tracks.length) {
-    return (
-      <div className="container mx-auto p-6">
-        <Alert>
-          <AlertDescription>
-            No music tracks found. Please complete the setup process first.
-          </AlertDescription>
-        </Alert>
-        <Button onClick={() => navigate("/setup")} className="mt-4">
-          Go to Setup
-        </Button>
       </div>
     );
   }
