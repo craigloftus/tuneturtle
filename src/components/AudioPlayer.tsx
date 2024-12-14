@@ -10,11 +10,15 @@ import {
   Volume2,
   AlertCircle,
   RefreshCw,
+  Download,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { Track } from "@/types/aws";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
+import { StorageService } from "@/lib/services/StorageService";
 
 interface AudioPlayerProps {
   track: Track | null;
@@ -23,6 +27,7 @@ interface AudioPlayerProps {
 }
 
 const s3Service = S3Service.getInstance();
+const storageService = StorageService.getInstance();
 
 export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -32,13 +37,22 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const [volume, setVolume] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isOfflineAvailable, setIsOfflineAvailable] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !track) return;
 
-    const handleError = (e: ErrorEvent) => {
+    const checkOfflineAvailability = async () => {
+      const isAvailable = await storageService.isTrackAvailableOffline(track.key);
+      setIsOfflineAvailable(isAvailable);
+    };
+
+    checkOfflineAvailability();
+
+    const handleError = async (e: ErrorEvent) => {
       let errorMessage = "Unable to access or play audio file.";
 
       // Handle format-specific errors
@@ -49,6 +63,15 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       } else if (e.message.includes("MEDIA_ERR_DECODE")) {
         errorMessage = "Audio file is corrupted or in an unsupported format.";
       } else if (e.message.includes("MEDIA_ERR_NETWORK")) {
+        if (await storageService.isTrackAvailableOffline(track.key)) {
+          // Try loading from cache if available offline
+          const cache = await caches.open('offline-albums');
+          const response = await cache.match(track.key);
+          if (response) {
+            audio.src = URL.createObjectURL(await response.blob());
+            return;
+          }
+        }
         errorMessage = "Network error while loading the audio file.";
       }
 
@@ -268,6 +291,44 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
             >
               <SkipForward className="h-4 w-4" />
             </Button>
+
+            {track && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  if (isDownloading) return;
+                  
+                  try {
+                    setIsDownloading(true);
+                    const signedUrl = await s3Service.getSignedUrl(track.key);
+                    await storageService.downloadAlbum([{ ...track, signedUrl }]);
+                    setIsOfflineAvailable(true);
+                    toast({
+                      title: "Download Complete",
+                      description: "Track is now available offline",
+                    });
+                  } catch (error) {
+                    toast({
+                      variant: "destructive",
+                      title: "Download Failed",
+                      description: error instanceof Error ? error.message : "Failed to download track",
+                    });
+                  } finally {
+                    setIsDownloading(false);
+                  }
+                }}
+                disabled={isOfflineAvailable || isDownloading}
+              >
+                {isDownloading ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : isOfflineAvailable ? (
+                  <WifiOff className="h-4 w-4" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>
