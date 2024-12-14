@@ -1,6 +1,8 @@
 import { Track } from "@/types/aws";
+import { S3Service } from "./S3Service";
 
 export class StorageService {
+  private s3Service = S3Service.getInstance();
   private static instance: StorageService;
   private readonly STORAGE_KEY = 'offline_albums';
 
@@ -25,49 +27,71 @@ export class StorageService {
     }
   }
 
-  public async downloadAlbum(tracks: Track[]): Promise<boolean> {
+  public async downloadAlbum(albumKey: string, tracks: Track[]): Promise<boolean> {
     try {
-      // Register the download with the service worker
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        const messageChannel = new MessageChannel();
-        
-        const downloadPromise = new Promise((resolve, reject) => {
-          messageChannel.port1.onmessage = (event) => {
-            if (event.data.success) {
-              resolve(true);
-            } else {
-              reject(new Error(event.data.error));
-            }
-          };
-        });
+      await this.requestStorageAccess();
 
-        registration.active?.postMessage(
-          {
-            type: 'DOWNLOAD_ALBUM',
-            tracks: tracks.map(track => ({
-              url: track.signedUrl,
-              key: track.key
-            }))
-          },
-          [messageChannel.port2]
-        );
+      if (!('serviceWorker' in navigator)) {
+        throw new Error('Service Worker is not supported in this browser');
+      }
 
-        await downloadPromise;
-        
+      const registration = await navigator.serviceWorker.ready;
+      if (!registration.active) {
+        throw new Error('Service Worker is not active');
+      }
+
+      const tracksWithUrls = await Promise.all(
+        tracks.map(async track => ({
+          ...track,
+          url: await s3Service.getSignedUrl(track.key)
+        }))
+      );
+
+      const messageChannel = new MessageChannel();
+      const downloadPromise = new Promise<boolean>((resolve, reject) => {
+        messageChannel.port1.onmessage = (event) => {
+          if (event.data.success) {
+            resolve(true);
+          } else {
+            reject(new Error(event.data.error));
+          }
+        };
+      });
+
+      registration.active.postMessage(
+        {
+          type: 'DOWNLOAD_ALBUM',
+          albumKey,
+          tracks: tracksWithUrls.map(track => ({
+            url: track.url,
+            key: track.key
+          }))
+        },
+        [messageChannel.port2]
+      );
+
+      const success = await downloadPromise;
+      
+      if (success) {
         // Store offline album metadata
         const storedAlbums = this.getStoredAlbums();
-        const albumKey = tracks[0].key.split('/')[0];
-        storedAlbums.push({
+        const albumMetadata = {
           key: albumKey,
           tracks: tracks.map(t => t.key),
           downloadDate: new Date().toISOString()
-        });
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(storedAlbums));
+        };
         
-        return true;
+        const existingIndex = storedAlbums.findIndex(a => a.key === albumKey);
+        if (existingIndex >= 0) {
+          storedAlbums[existingIndex] = albumMetadata;
+        } else {
+          storedAlbums.push(albumMetadata);
+        }
+        
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(storedAlbums));
       }
-      return false;
+      
+      return success;
     } catch (error) {
       console.error('[StorageService] Failed to download album:', error);
       throw error;

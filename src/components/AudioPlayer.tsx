@@ -301,12 +301,24 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
                   
                   try {
                     setIsDownloading(true);
-                    const signedUrl = await s3Service.getSignedUrl(track.key);
-                    await storageService.downloadAlbum([{ ...track, signedUrl }]);
+                    const albumKey = track.key.split('/')[0];
+                    // Get all tracks from the same album
+                    const albumTracks = (await s3Service.listObjects({ limit: 100 }))
+                      .objects
+                      .filter(obj => obj.Key.startsWith(albumKey))
+                      .map(obj => ({
+                        key: obj.Key,
+                        size: obj.Size,
+                        lastModified: obj.LastModified,
+                        album: albumKey,
+                        fileName: obj.Key.split('/').pop() || ''
+                      }));
+                    
+                    await storageService.downloadAlbum(albumKey, albumTracks);
                     setIsOfflineAvailable(true);
                     toast({
                       title: "Download Complete",
-                      description: "Track is now available offline",
+                      description: `Album "${albumKey}" is now available offline`,
                     });
                   } catch (error) {
                     toast({
