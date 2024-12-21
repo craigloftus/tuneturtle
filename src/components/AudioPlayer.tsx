@@ -85,7 +85,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       setIsPlaying(false);
     };
 
-    audio.addEventListener("error", handleError as EventListener);
+    audio.addEventListener("error", handleError);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
     audio.addEventListener("ended", handleEnded);
