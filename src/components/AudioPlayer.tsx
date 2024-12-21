@@ -100,7 +100,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     loadTrack();
 
     return () => {
-      audio.removeEventListener("error", handleError as EventListener);
+      audio.removeEventListener("error", handleError);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("ended", handleEnded);
