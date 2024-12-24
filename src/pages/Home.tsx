@@ -38,7 +38,7 @@ export function Home() {
       
       const cachedTracks = trackService.getTracks();
       if (cachedTracks) {
-        setTracks(cachedTracks);
+        setTracks(Object.values(cachedTracks));
       }
     };
 

@@ -35,10 +35,15 @@ export interface Album {
   coverUrl?: string;
 }
 
+interface Tracks {
+  [key: string]: Track;
+}
+
 export class TrackService {
   private static instance: TrackService;
   private readonly METADATA_BYTE_RANGE = 5000;
-
+  private trackPrefix = "track/";
+  
   private constructor() {}
 
   public static getInstance(): TrackService {
@@ -47,8 +52,8 @@ export class TrackService {
     }
     return TrackService.instance;
   }
-
-  public saveTracks(tracks: Track[]): void {
+  
+  public saveTracks(tracks: Tracks): void {
     try {
       localStorage.setItem('tracks', JSON.stringify(tracks));
     } catch (error) {
@@ -56,7 +61,7 @@ export class TrackService {
     }
   }
   
-  public getTracks(): Track[] | null {
+  public getTracks(): Tracks | null {
     try {
       const stored = localStorage.getItem('tracks');
       return stored ? JSON.parse(stored) : null;
@@ -64,6 +69,16 @@ export class TrackService {
       console.error('[CacheService] Failed to retrieve tracks:', error);
       return null;
     }
+  }
+
+  public updateTrack(key: string, track: Track) {
+    const tracks = this.getTracks();
+    if (!tracks) {
+      return;
+    }
+
+    tracks[key] = track;
+    this.saveTracks(tracks);
   }
 
   public getMimeType(extension: string): string {

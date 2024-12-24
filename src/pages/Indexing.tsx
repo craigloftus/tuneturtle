@@ -88,7 +88,7 @@ export function Indexing() {
         });
 
         // Save tracks to cache
-        trackService.saveTracks(tracks);
+        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])))
 
         // Small delay before navigation for better UX
         setTimeout(() => navigate("/"), 1000);
