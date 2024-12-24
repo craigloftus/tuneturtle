@@ -1,21 +1,49 @@
-import { 
-  S3Client, 
-  ListObjectsV2Command,
-  _Object
-} from "@aws-sdk/client-s3";
-import { S3Credentials } from "@/types/aws";
-import { CacheService } from "./CacheService";
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl as s3GetSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { S3Client, ListObjectsV2Command, _Object } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl as s3GetSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+export interface S3Credentials {
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  bucket: string;
+}
 
 export class S3Service {
   private static instance: S3Service;
   private s3Client: S3Client | null = null;
-  private cacheService: CacheService;
 
-  private constructor() {
-    this.cacheService = CacheService.getInstance();
+  private constructor() {}
+
+  private readonly AWS_CREDENTIALS_KEY = "aws_credentials";
+
+  public saveCredentials(credentials: S3Credentials): void {
+    try {
+      localStorage.setItem(
+        this.AWS_CREDENTIALS_KEY,
+        JSON.stringify(credentials),
+      );
+    } catch (error) {
+      console.error("[S3Service] Failed to save AWS credentials:", error);
+    }
+  }
+
+  public getCredentials(): S3Credentials | null {
+    try {
+      const stored = localStorage.getItem(this.AWS_CREDENTIALS_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error("[S3Service] Failed to retrieve AWS credentials:", error);
+      return null;
+    }
+  }
+
+  public clearCredentials(): void {
+    try {
+      localStorage.removeItem(this.AWS_CREDENTIALS_KEY);
+    } catch (error) {
+      console.error("[S3Service] Failed to clear AWS credentials:", error);
+    }
   }
 
   public static getInstance(): S3Service {
@@ -25,38 +53,47 @@ export class S3Service {
     return S3Service.instance;
   }
 
-  private async initializeClient(credentials: S3Credentials): Promise<S3Client> {
+  private async initializeClient(
+    credentials: S3Credentials,
+  ): Promise<S3Client> {
     this.s3Client = new S3Client({
       region: credentials.region,
       credentials: {
         accessKeyId: credentials.accessKeyId,
         secretAccessKey: credentials.secretAccessKey,
-      }
+      },
     });
     return this.s3Client;
   }
 
-  public async validateCredentials(credentials: S3Credentials): Promise<{ success: boolean }> {
+  public async validateCredentials(
+    credentials: S3Credentials,
+  ): Promise<{ success: boolean }> {
     try {
       const client = await this.initializeClient(credentials);
       const command = new ListObjectsV2Command({
         Bucket: credentials.bucket,
         MaxKeys: 1,
       });
-      
+
       await client.send(command);
-      this.cacheService.saveCredentials(credentials);
+      this.saveCredentials(credentials);
       return { success: true };
     } catch (error) {
-      console.error('[S3Service] Validation error:', error);
-      throw new Error(error instanceof Error ? error.message : 'Invalid AWS credentials');
+      console.error("[S3Service] Validation error:", error);
+      throw new Error(
+        error instanceof Error ? error.message : "Invalid AWS credentials",
+      );
     }
   }
 
-  public async getClientAndBucket(): Promise<{ s3Client: S3Client, bucket: string }> {
-    const credentials = this.cacheService.getCredentials();
+  public async getClientAndBucket(): Promise<{
+    s3Client: S3Client;
+    bucket: string;
+  }> {
+    const credentials = this.getCredentials();
     if (!credentials) {
-      throw new Error('No AWS credentials found');
+      throw new Error("[S3Service] No AWS credentials found");
     }
 
     if (!this.s3Client) {
@@ -65,7 +102,7 @@ export class S3Service {
 
     return {
       s3Client: this.s3Client!,
-      bucket: credentials.bucket
+      bucket: credentials.bucket,
     };
   }
 
@@ -81,7 +118,7 @@ export class S3Service {
       expiresIn: 3600,
     });
   }
-  
+
   public async listObjects(options: {
     continuationToken?: string;
     limit?: number;
@@ -90,14 +127,11 @@ export class S3Service {
     nextContinuationToken?: string;
     isTruncated: boolean;
   }> {
-    const { 
-      limit = 100,
-      continuationToken,
-    } = options;
+    const { limit = 100, continuationToken } = options;
 
-    const credentials = this.cacheService.getCredentials();
+    const credentials = this.getCredentials();
     if (!credentials) {
-      throw new Error('No AWS credentials found');
+      throw new Error("[S3Service] No AWS credentials found");
     }
 
     if (!this.s3Client) {
@@ -114,12 +148,12 @@ export class S3Service {
       const response = await this.s3Client!.send(command);
 
       return {
-        objects: (response.Contents || []),
+        objects: response.Contents || [],
         nextContinuationToken: response.NextContinuationToken,
         isTruncated: response.IsTruncated || false,
       };
     } catch (error) {
-      console.error('[S3Service] Error fetching tracks:', error);
+      console.error("[S3Service] Error fetching tracks:", error);
       throw error;
     }
   }

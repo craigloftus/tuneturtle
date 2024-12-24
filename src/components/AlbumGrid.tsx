@@ -1,4 +1,4 @@
-import { Album } from "@/types/aws";
+import { Album } from "@/lib/services/TrackService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 

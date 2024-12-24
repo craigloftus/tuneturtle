@@ -1,7 +1,7 @@
-import { Track, Album } from "@/types/aws";
+import { Track, Album } from "@/lib/services/TrackService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { PlayCircle } from "lucide-react";
+import { Check, Cloud, CloudDownload, Download, PlayCircle } from "lucide-react";
 
 interface TrackListProps {
   tracks: Track[];
@@ -90,9 +90,6 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
       <div className="p-4 space-y-6">
         {Object.entries(tracksByAlbum).map(([groupName, groupTracks]) => (
           <div key={groupName} className="space-y-2">
-            {!selectedAlbum && (
-              <h3 className="font-semibold text-lg px-4">{groupName}</h3>
-            )}
             {groupTracks.map((track) => (
               <Button
                 key={track.key}
@@ -102,6 +99,12 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
               >
                 <PlayCircle className="mr-2 h-4 w-4" />
                 <span className="truncate">{getTrackDisplayName(track)}</span>
+                {track.localPath && (
+                  <Check className="mr-2 h-4 w-4" /> 
+                )}
+                {!track.localPath && (
+                  <Cloud className="mr-2 h-4 w-4" /> 
+                )}
               </Button>
             ))}
           </div>

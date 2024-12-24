@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
-import { CacheService } from "@/lib/services/CacheService";
-import { Track } from "@/types/aws";
+import { Track, TrackService } from "@/lib/services/TrackService";
 import { _Object, S3Client } from "@aws-sdk/client-s3";
-import { MetadataService } from "@/lib/services/MetadataService";
 import { Header } from "@/components/Header";
 
 
@@ -18,7 +16,6 @@ export function Indexing() {
   const { toast } = useToast();
   const [isIndexing, setIsIndexing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const metadataService = MetadataService.getInstance();
 
   const createTrackFromS3Object = async (
     obj: _Object,
@@ -43,7 +40,7 @@ export function Indexing() {
   useEffect(() => {
     const startIndexing = async () => {
       // Check if S3 credentials are stored
-      const storedCredentials = CacheService.getInstance().getCredentials();
+      const storedCredentials = S3Service.getInstance().getCredentials();
       if (!storedCredentials) {
         navigate("/setup");
       }
@@ -51,7 +48,7 @@ export function Indexing() {
       setIsIndexing(true);
       try {
         const s3Service = S3Service.getInstance();
-        const cacheService = CacheService.getInstance();
+        const trackService = TrackService.getInstance();
 
         const { s3Client, bucket } = await s3Service.getClientAndBucket();
         const tracks = [];
@@ -91,7 +88,7 @@ export function Indexing() {
         });
 
         // Save tracks to cache
-        cacheService.saveTracks(tracks);
+        trackService.saveTracks(tracks);
 
         // Small delay before navigation for better UX
         setTimeout(() => navigate("/"), 1000);

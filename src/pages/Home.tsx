@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react";
-import { Track, Album, ViewMode } from "@/types/aws";
 import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CloudDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CacheService } from "@/lib/services/CacheService";
+import { Track, Album, TrackService } from "@/lib/services/TrackService";
+import { S3Service } from "@/lib/services/S3Service";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
+
+const s3Service = S3Service.getInstance();
+
+type ViewMode = "grid" | "list";
 
 export function Home() {
   const [, navigate] = useLocation();
@@ -30,9 +34,9 @@ export function Home() {
 
   useEffect(() => {
     const loadTracks = async () => {
-      const cacheService = CacheService.getInstance();
+      const trackService = TrackService.getInstance();
       
-      const cachedTracks = cacheService.getTracks();
+      const cachedTracks = trackService.getTracks();
       if (cachedTracks) {
         setTracks(cachedTracks);
       }
@@ -110,6 +114,18 @@ export function Home() {
     }
   };
 
+  const download = async (tracks: Track[]) => {
+    const root = await navigator.storage.getDirectory();
+    await Promise.all(tracks.map(async (track) => {
+      const url = await s3Service.getSignedUrl(track.key);
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const fh = await root.getFileHandle(track.key, { create: true })
+      const writer = await fh.createWritable();
+      await writer.write(blob);
+    }));
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
@@ -128,6 +144,7 @@ export function Home() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h2 className="text-xl font-semibold truncate">{selectedAlbum.name}</h2>
+          <Button onClick={() => download(selectedAlbum.tracks)}><CloudDownload className="ml-2 h-4 w-4" /></Button>
         </div>
       )}
       

@@ -15,7 +15,7 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import { S3Credentials } from "@/types/aws";
+import { S3Credentials } from "@/lib/services/S3Service";
 
 const formSchema = z.object({
   accessKeyId: z.string().min(1, "Access Key ID is required"),

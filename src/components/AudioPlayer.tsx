@@ -8,14 +8,8 @@ import {
   SkipForward,
   SkipBack,
   Volume2,
-  AlertCircle,
-  RefreshCw,
-  Download,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
-import { Track } from "@/types/aws";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
 
@@ -40,7 +34,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !track) return;
-
+    
     const handleError = async (e: ErrorEvent) => {
       let errorMessage = "Unable to access or play audio file.";
 
@@ -93,10 +87,15 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     audio.addEventListener("pause", handlePause);
 
     const loadTrack = async () => {
-      audio.src = await s3Service.getSignedUrl(track.key);
+      if (track.localPath) {
+        audio.src = track.localPath; 
+      }
+      else {
+        audio.src = await s3Service.getSignedUrl(track.key);
+      }
       audio.load();
     };
-
+    
     loadTrack();
 
     return () => {
@@ -108,17 +107,6 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       audio.removeEventListener("pause", handlePause);
     };
   }, [track, onNext, toast]);
-
-  const handleRetry = async () => {
-    const audio = audioRef.current;
-    if (!audio || !track) return;
-
-    setIsRetrying(true);
-    setError(null);
-    audio.src = await s3Service.getSignedUrl(track.key);
-    audio.load();
-    setIsRetrying(false);
-  };
 
   const togglePlayPause = async () => {
     const audio = audioRef.current;
@@ -191,27 +179,6 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   return (
     <Card className="p-4 fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t">
       <audio ref={audioRef} preload="metadata" autoPlay />
-
-      {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="flex items-center justify-between">
-            <span>{error}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRetry}
-              disabled={isRetrying}
-              className="ml-2"
-            >
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${isRetrying ? "animate-spin" : ""}`}
-              />
-              {isRetrying ? "Retrying..." : "Retry"}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
 
       <div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between">

@@ -4,7 +4,7 @@ import { S3Setup } from "@/components/S3Setup";
 import { validateS3Credentials } from "@/lib/aws";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
-import type { S3Credentials } from "@/types/aws";
+import type { S3Credentials } from "@/lib/services/S3Service";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
