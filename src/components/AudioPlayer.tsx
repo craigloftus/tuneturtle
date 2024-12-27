@@ -2,13 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Play,
-  Pause,
-  SkipForward,
-  SkipBack,
-  Volume2,
-} from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Volume2 } from "lucide-react";
 import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
@@ -28,13 +22,14 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [error, setError] = useState<string | null>(null);
-  const [isRetrying, setIsRetrying] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     const audio = audioRef.current;
+    let localURL: string | null = null;
+
     if (!audio || !track) return;
-    
+
     const handleError = async (e: ErrorEvent) => {
       let errorMessage = "Unable to access or play audio file.";
 
@@ -87,15 +82,24 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     audio.addEventListener("pause", handlePause);
 
     const loadTrack = async () => {
-      if (track.localPath) {
-        audio.src = track.localPath; 
+      if (localURL) {
+        // Try to tidy up if we're already holding a track in memory
+        URL.revokeObjectURL(localURL);
+        localURL = null;
       }
-      else {
+
+      if (track.downloaded && track.localPath) {
+        const root = await navigator.storage.getDirectory();
+        const trackHandle = await root.getFileHandle(track.localPath);
+        const trackFile = await trackHandle.getFile();
+        localURL = URL.createObjectURL(trackFile);
+        audio.src = localURL;
+      } else {
         audio.src = await s3Service.getSignedUrl(track.key);
       }
       audio.load();
     };
-    
+
     loadTrack();
 
     return () => {

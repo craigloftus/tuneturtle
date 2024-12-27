@@ -12,7 +12,9 @@ import { S3Service } from "@/lib/services/S3Service";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
 
+
 const s3Service = S3Service.getInstance();
+const trackService = TrackService.getInstance();
 
 type ViewMode = "grid" | "list";
 
@@ -27,15 +29,13 @@ export function Home() {
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
     localStorage.setItem("viewMode", viewMode);
   }, [viewMode]);
 
   useEffect(() => {
     const loadTracks = async () => {
-      const trackService = TrackService.getInstance();
-      
       const cachedTracks = trackService.getTracks();
       if (cachedTracks) {
         setTracks(Object.values(cachedTracks));
@@ -114,25 +114,41 @@ export function Home() {
     }
   };
 
-  const download = async (tracks: Track[]) => {
+  const handleDownload = async (track: Track) => {
+    let trackUUID = self.crypto.randomUUID();
+
+    const url = await s3Service.getSignedUrl(track.key);
+    const resp = await fetch(url);
+    const blob = await resp.blob();
     const root = await navigator.storage.getDirectory();
-    await Promise.all(tracks.map(async (track) => {
-      const url = await s3Service.getSignedUrl(track.key);
-      const resp = await fetch(url);
-      const blob = await resp.blob();
-      const fh = await root.getFileHandle(track.key, { create: true })
-      const writer = await fh.createWritable();
-      await writer.write(blob);
-    }));
+    const fh = await root.getFileHandle(trackUUID, { create: true });
+    const writer = await fh.createWritable();
+    await writer.write(blob);
+    await writer.close();
+    console.log('Track downloaded:', track.key, trackUUID);
+    trackService.updateTrack(track.key, {
+      ...track,
+      downloaded: true,
+      localPath: trackUUID,
+    });
   }
+  
+  const download = async (tracks: Track[]) => {
+    
+    for (const track of tracks) {
+      await handleDownload(track);
+    }
+
+    const cachedTracks = trackService.getTracks();
+    if (cachedTracks) {
+      setTracks(Object.values(cachedTracks));
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header 
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
-      />
-      
+      <Header viewMode={viewMode} onViewModeChange={handleViewModeChange} />
+
       {selectedAlbum && (
         <div className="mt-3 px-6 flex items-center gap-3">
           <Button
@@ -143,11 +159,15 @@ export function Home() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h2 className="text-xl font-semibold truncate">{selectedAlbum.name}</h2>
-          <Button onClick={() => download(selectedAlbum.tracks)}><CloudDownload className="ml-2 h-4 w-4" /></Button>
+          <h2 className="text-xl font-semibold truncate">
+            {selectedAlbum.name}
+          </h2>
+          <Button onClick={() => download(selectedAlbum.tracks)}>
+            <CloudDownload className="ml-2 h-4 w-4" />
+          </Button>
         </div>
       )}
-      
+
       <div className="container mx-auto px-6 pb-32 mt-6">
         <AnimatePresence mode="wait">
           <motion.div
@@ -158,10 +178,7 @@ export function Home() {
             transition={{ duration: 0.2 }}
           >
             {viewMode === "grid" ? (
-              <AlbumGrid
-                albums={albums}
-                onTrackSelect={handleAlbumSelect}
-              />
+              <AlbumGrid albums={albums} onTrackSelect={handleAlbumSelect} />
             ) : (
               <TrackList
                 tracks={selectedAlbum ? selectedAlbum.tracks : tracks}

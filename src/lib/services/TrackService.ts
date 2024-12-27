@@ -26,7 +26,8 @@ export interface Track {
   album: string;
   fileName: string;
   metadata?: TrackMetadata;
-  signedUrl?: string;
+  downloaded?: boolean;
+  localPath?: string;
 }
 
 export interface Album {
