@@ -26,6 +26,8 @@ export function Home() {
     const cached = localStorage.getItem("viewMode");
     return (cached as ViewMode) || "grid";
   });
+
+  const [albums, setAlbums] = useState<Album[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function Home() {
     loadTracks();
   }, [toast]);
 
+  useEffect(() => {
   // Process tracks into albums with improved organization
   const albums = tracks.reduce((acc, track) => {
     const albumName = track.album || "Unknown Album";
@@ -59,11 +62,8 @@ export function Home() {
     return acc;
   }, [] as Album[]);
 
-  const currentAlbum = currentTrack
-    ? albums.find((album) =>
-        album.tracks.some((t) => t.key === currentTrack.key),
-      )
-    : null;
+    setAlbums(albums);
+  }, [tracks]);
 
   if (error) {
     return (
@@ -125,7 +125,7 @@ export function Home() {
     const writer = await fh.createWritable();
     await writer.write(blob);
     await writer.close();
-    console.log('Track downloaded:', track.key, trackUUID);
+    
     trackService.updateTrack(track.key, {
       ...track,
       downloaded: true,
@@ -133,8 +133,15 @@ export function Home() {
     });
   }
   
-  const download = async (tracks: Track[]) => {
-    
+  const downloadTrack = async (track: Track) => {
+    await handleDownload(track);
+    const cachedTracks = trackService.getTracks();
+    if (cachedTracks) {
+      setTracks(Object.values(cachedTracks));
+    }
+  }
+  
+  const downloadAlbum = async (tracks: Track[]) => {
     for (const track of tracks) {
       await handleDownload(track);
     }
@@ -162,7 +169,7 @@ export function Home() {
           <h2 className="text-xl font-semibold truncate">
             {selectedAlbum.name}
           </h2>
-          <Button onClick={() => download(selectedAlbum.tracks)}>
+          <Button onClick={() => downloadAlbum(selectedAlbum.tracks)}>
             <CloudDownload className="ml-2 h-4 w-4" />
           </Button>
         </div>
@@ -185,6 +192,7 @@ export function Home() {
                 onSelect={setCurrentTrack}
                 currentTrack={currentTrack}
                 selectedAlbum={selectedAlbum}
+                onDownloadTrack={downloadTrack}
               />
             )}
           </motion.div>

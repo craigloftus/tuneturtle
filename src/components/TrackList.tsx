@@ -8,9 +8,10 @@ interface TrackListProps {
   onSelect: (track: Track) => void;
   currentTrack: Track | null;
   selectedAlbum: Album | null;
+  onDownloadTrack: (track: Track) => Promise<void>;
 }
 
-export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: TrackListProps) {
+export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDownloadTrack }: TrackListProps) {
   // Debug log input tracks
   console.debug('[TrackList] Initial data:', {
     totalTracks: tracks.length,
@@ -91,6 +92,7 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
         {Object.entries(tracksByAlbum).map(([groupName, groupTracks]) => (
           <div key={groupName} className="space-y-2">
             {groupTracks.map((track) => (
+              <div className="flex justify-between items-center" key={track.key}>
               <Button
                 key={track.key}
                 variant={currentTrack?.key === track.key ? "secondary" : "ghost"}
@@ -99,13 +101,19 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum }: Tra
               >
                 <PlayCircle className="mr-2 h-4 w-4" />
                 <span className="truncate">{getTrackDisplayName(track)}</span>
-                {track.localPath && (
-                  <Check className="mr-2 h-4 w-4" /> 
-                )}
-                {!track.localPath && (
-                  <Cloud className="mr-2 h-4 w-4" /> 
-                )}
               </Button>
+              {track.localPath && (
+                <Check className="mr-2 h-4 w-4" /> 
+              )}
+              {!track.localPath && ( 
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => onDownloadTrack(track)}>
+                  <CloudDownload className="h-4 w-4" />
+                </Button>
+              )}
+              </div>
             ))}
           </div>
         ))}
