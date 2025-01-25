@@ -28,10 +28,16 @@ export function Home() {
   });
 
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [error, setError] = useState<string | null>(null);
-  
+  const [selectedAlbumIndex, setSelectedAlbumIndex] = useState<number | null>(null);
+
+  const currentIndex = currentTrack
+    ? tracks.findIndex((t) => t.key === currentTrack.key)
+    : -1;
+
+  const selectedAlbum = selectedAlbumIndex !== null ? albums[selectedAlbumIndex] : null;
+
   useEffect(() => {
     localStorage.setItem("viewMode", viewMode);
   }, [viewMode]);
@@ -48,19 +54,19 @@ export function Home() {
   }, [toast]);
 
   useEffect(() => {
-  // Process tracks into albums with improved organization
-  const albums = tracks.reduce((acc, track) => {
-    const albumName = track.album || "Unknown Album";
-    const existing = acc.find((a) => a.name === albumName);
+    // Process tracks into albums with improved organization
+    const albums = tracks.reduce((acc, track) => {
+      const albumName = track.album || "Unknown Album";
+      const existing = acc.find((a) => a.name === albumName);
 
-    if (existing) {
-      existing.tracks.push(track);
-    } else {
-      acc.push({ name: albumName, tracks: [track], coverUrl: undefined });
-    }
+      if (existing) {
+        existing.tracks.push(track);
+      } else {
+        acc.push({ name: albumName, tracks: [track], coverUrl: undefined });
+      }
 
-    return acc;
-  }, [] as Album[]);
+      return acc;
+    }, [] as Album[]);
 
     setAlbums(albums);
   }, [tracks]);
@@ -82,25 +88,21 @@ export function Home() {
   }
 
   const handleAlbumSelect = (album: Album) => {
-    setSelectedAlbum(album);
+    setSelectedAlbumIndex(albums.findIndex(a => a.name === album.name));
     setViewMode("list");
   };
 
   const handleBackToGrid = () => {
     setViewMode("grid");
-    setSelectedAlbum(null);
+    setSelectedAlbumIndex(null);
   };
 
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
     if (mode === "grid") {
-      setSelectedAlbum(null);
+      setSelectedAlbumIndex(null);
     }
   };
-
-  const currentIndex = currentTrack
-    ? tracks.findIndex((t) => t.key === currentTrack.key)
-    : -1;
 
   const handleNext = () => {
     if (currentIndex < tracks.length - 1) {

@@ -34,6 +34,7 @@ export interface Album {
   name: string;
   tracks: Track[];
   coverUrl?: string;
+  selected?: boolean;
 }
 
 interface Tracks {

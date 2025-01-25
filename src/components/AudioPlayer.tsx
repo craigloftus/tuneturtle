@@ -2,26 +2,29 @@ import { useState, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, SkipForward, SkipBack, Volume2 } from "lucide-react";
+import { Play, Pause, Volume2 } from "lucide-react";
 import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
+import { formatTime } from "@/utils/formatters";
 
 interface AudioPlayerProps {
   track: Track | null;
-  onNext?: () => void;
-  onPrevious?: () => void;
+  onNext: () => void | null;
+  onPrevious: () => void | null;
 }
 
 const s3Service = S3Service.getInstance();
 
 export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [error, setError] = useState<string | null>(null);
+  const [playerState, setPlayerState] = useState({
+    isPlaying: false,
+    currentTime: 0,
+    duration: 0,
+    volume: 1,
+    error: null as string | null
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -44,8 +47,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
         errorMessage = "Network error while loading the audio file.";
       }
 
-      setError(errorMessage);
-      setIsPlaying(false);
+      setPlayerState(prev => ({ ...prev, error: errorMessage, isPlaying: false }));
       toast({
         variant: "destructive",
         title: "Error Loading Track",
@@ -54,12 +56,12 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     };
 
     const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      setPlayerState(prev => ({ ...prev, currentTime: audio.currentTime }));
     };
 
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-      setError(null); // Clear any previous errors
+      setPlayerState(prev => ({ ...prev, duration: audio.duration }));
+      setPlayerState(prev => ({ ...prev, error: null })); // Clear any previous errors
     };
 
     const handleEnded = () => {
@@ -67,11 +69,12 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     };
 
     const handlePlay = () => {
-      setIsPlaying(true);
+      setPlayerState(prev => ({ ...prev, isPlaying: true }));
+      updateMediaPosition();
     };
 
     const handlePause = () => {
-      setIsPlaying(false);
+      setPlayerState(prev => ({ ...prev, isPlaying: false }));
     };
 
     audio.addEventListener("error", handleError);
@@ -112,71 +115,73 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     };
   }, [track, onNext, toast]);
 
-  const togglePlayPause = async () => {
+  const togglePlayPause = async (): Promise<void> => {
     const audio = audioRef.current;
     if (!audio) return;
 
     try {
-      setError(null);
+      setPlayerState(prev => ({ ...prev, error: null }));
 
       if (!audio.paused) {
         audio.pause();
       } else {
         await audio.play();
       }
-    } catch (err) {
+    } catch (err: unknown) {
       const errorMessage = "Unable to play audio. Please try again.";
       console.error(errorMessage, err);
-      setError(errorMessage);
-      setIsPlaying(false);
-      toast({
-        variant: "destructive",
-        title: "Playback Error",
-        description: errorMessage,
-      });
+      setPlayerState(prev => ({ ...prev, error: errorMessage, isPlaying: false }));
     }
   };
 
-  const handleSeek = (value: number[]) => {
+  const handleSeek = (value: number[]): void => {
     const audio = audioRef.current;
     if (!audio) return;
 
     try {
       audio.currentTime = value[0];
-      setCurrentTime(value[0]);
-    } catch (err) {
+      setPlayerState(prev => ({ ...prev, currentTime: value[0] }));
+      updateMediaPosition();
+    } catch (err: unknown) {
       console.error("Seek error:", err);
-      toast({
-        variant: "destructive",
-        title: "Seek Error",
-        description: "Failed to seek in the audio track.",
-      });
     }
   };
 
-  const handleVolumeChange = (value: number[]) => {
+  const handleVolumeChange = (value: number[]): void => {
     const audio = audioRef.current;
     if (!audio) return;
 
     try {
       const newVolume = value[0];
       audio.volume = newVolume;
-      setVolume(newVolume);
-    } catch (err) {
+      setPlayerState(prev => ({ ...prev, volume: newVolume }));
+    } catch (err: unknown) {
       console.error("Volume control error:", err);
-      toast({
-        variant: "destructive",
-        title: "Volume Control Error",
-        description: "Failed to change volume.",
-      });
     }
   };
 
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  };
+   const updateMediaPosition = () => {
+    const audio = audioRef.current;
+    if (!audio || !('mediaSession' in navigator)) return;
+    navigator.mediaSession.setPositionState({
+      duration: audio.duration,
+      position: audio.currentTime,
+    });
+   };
+
+  useEffect(() => {
+    if ('mediaSession' in navigator && track) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.key,
+        // Add more metadata if available
+      });
+
+      navigator.mediaSession.setActionHandler('play', togglePlayPause);
+      navigator.mediaSession.setActionHandler('pause', togglePlayPause);
+      navigator.mediaSession.setActionHandler('previoustrack', onPrevious);
+      navigator.mediaSession.setActionHandler('nexttrack', onNext);
+    }
+  }, [track]);
 
   if (!track) return null;
 
@@ -189,14 +194,14 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{track.key}</p>
             <p className="text-xs text-muted-foreground">
-              {formatTime(currentTime)} / {formatTime(duration)}
+              {formatTime(playerState.currentTime)} / {formatTime(playerState.duration)}
             </p>
           </div>
           <div className="flex items-center space-x-2">
             <Volume2 className="h-4 w-4" />
             <Slider
               className="w-24"
-              value={[volume]}
+              value={[playerState.volume]}
               max={1}
               step={0.1}
               onValueChange={handleVolumeChange}
@@ -206,41 +211,23 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
         <div className="space-y-2">
           <Slider
-            value={[currentTime]}
-            max={duration || 100}
+            value={[playerState.currentTime]}
+            max={playerState.duration || 100}
             step={1}
             onValueChange={handleSeek}
           />
           <div className="flex justify-center items-center space-x-4">
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={onPrevious}
-              disabled={!onPrevious}
-            >
-              <SkipBack className="h-4 w-4" />
-            </Button>
-
-            <Button
               variant="outline"
               size="icon"
               onClick={togglePlayPause}
-              disabled={!!error}
+              disabled={!!playerState.error}
             >
-              {isPlaying ? (
+              {playerState.isPlaying ? (
                 <Pause className="h-4 w-4" />
               ) : (
                 <Play className="h-4 w-4" />
               )}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onNext}
-              disabled={!onNext}
-            >
-              <SkipForward className="h-4 w-4" />
             </Button>
           </div>
         </div>
