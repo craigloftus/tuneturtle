@@ -78,6 +78,9 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
 
   // Helper function to get display name for track
   const getTrackDisplayName = (track: Track) => {
+    if (track?.metadata?.title) {
+      return track.metadata.title;
+    }
     if (!track.fileName) {
       // Fallback if fileName is not set
       const parts = track.key.split('/');
@@ -103,7 +106,7 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
                 <span className="truncate">{getTrackDisplayName(track)}</span>
               </Button>
               {track.localPath && (
-                <Check className="mr-2 h-4 w-4" /> 
+                <Check className="mr-2 h-4 w-4" />
               )}
               {!track.localPath && ( 
                 <Button

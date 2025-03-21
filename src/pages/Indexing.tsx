@@ -38,6 +38,8 @@ export function Indexing() {
   };
 
   useEffect(() => {
+    let indexing = true;
+
     const startIndexing = async () => {
       // Check if S3 credentials are stored
       const storedCredentials = S3Service.getInstance().getCredentials();
@@ -45,7 +47,7 @@ export function Indexing() {
         navigate("/setup");
       }
 
-      setIsIndexing(true);
+      setIsIndexing(indexing);
       try {
         const s3Service = S3Service.getInstance();
         const trackService = TrackService.getInstance();
@@ -59,7 +61,6 @@ export function Indexing() {
         let maxKeys = 100;
 
         while (isTruncated) {
-          console.log("Fetching objects...");
           const {
             objects,
             nextContinuationToken: nextToken,
@@ -70,8 +71,10 @@ export function Indexing() {
           });
 
           for (const obj of objects) {
-            const track = await createTrackFromS3Object(obj, bucket, s3Client);
-            tracks.push(track);
+            if(trackService.isAudioFile(obj.Key!)) {
+              const track = await createTrackFromS3Object(obj, bucket, s3Client);
+              tracks.push(track);
+            }
           }
 
           nextContinuationToken = nextToken;
@@ -81,14 +84,24 @@ export function Indexing() {
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
 
+
+        // This feels like a hack, rather than the correct solution
+        if(!indexing) return;
+
+        // Save tracks to cache
+        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])))
+
+        // Process tracks in batches of n
+        for (const track of tracks) {
+          await trackService.populateTrackMetadata(track);
+          await new Promise((resolve) => setTimeout(resolve, 5));  // Relax our calm just a little?
+        };
+
         // Final progress update
         toast({
           title: "Success",
           description: `Found ${tracks.length} tracks in your music library`,
         });
-
-        // Save tracks to cache
-        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])))
 
         // Small delay before navigation for better UX
         setTimeout(() => navigate("/"), 1000);
@@ -104,7 +117,11 @@ export function Indexing() {
       }
     };
 
-    startIndexing();
+    const indexingPromise = startIndexing();
+
+    return () => {
+      indexing = false;
+    };
   }, [navigate, toast]);
 
   if (error) {

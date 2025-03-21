@@ -1,4 +1,5 @@
-import * as mm from 'music-metadata-browser';
+import * as mm from 'music-metadata';
+import { S3Service } from './S3Service';
 
 // Define supported audio formats and their MIME types
 const SUPPORTED_FORMATS = {
@@ -10,13 +11,11 @@ const SUPPORTED_FORMATS = {
   aac: 'audio/aac'
 } as const;
 
-
 export interface TrackMetadata {
-  title: string;
-  artist: string;
+  title?: string;
+  artist?: string;
   duration: number;
   bitrate: number;
-  mimeType: string;
 }
 
 export interface Track {
@@ -44,8 +43,7 @@ interface Tracks {
 export class TrackService {
   private static instance: TrackService;
   private readonly METADATA_BYTE_RANGE = 5000;
-  private trackPrefix = "track/";
-  
+  private s3Service = S3Service.getInstance();
   private constructor() {}
 
   public static getInstance(): TrackService {
@@ -73,13 +71,13 @@ export class TrackService {
     }
   }
 
-  public updateTrack(key: string, track: Track) {
+  public updateTrack(track: Track) {
     const tracks = this.getTracks();
     if (!tracks) {
       return;
     }
 
-    tracks[key] = track;
+    tracks[track.key] = track;
     this.saveTracks(tracks);
   }
 
@@ -92,25 +90,30 @@ export class TrackService {
     return extension in SUPPORTED_FORMATS;
   }
 
-  public async extractMetadata(audioBlob: Blob, fileName: string): Promise<TrackMetadata> {
-    const metadata = await mm.parseBlob(audioBlob);
-    const fileExtension = fileName.split('.').pop()?.toLowerCase() || '';
-
-    return Promise.resolve({
-      title: metadata.common.title || this.formatTitle(fileName),
-      artist: metadata.common.artist || 'Unknown Artist',
-      duration: metadata.format.duration || 0,
-      bitrate: metadata.format.bitrate || 0,
-      mimeType: this.getMimeType(fileExtension),
-    });
+  public async populateTrackMetadata(track: Track) {
+    const range = await this.fetchTrackMetadataRange(track.key);
+    track.metadata = await this.extractMetadata(range);
+    this.updateTrack(track);
   }
 
-  private formatTitle(fileName: string): string {
-    // Remove file extension and common prefixes
-    return fileName
-      .replace(/\.[^/.]+$/, '') // Remove extension
-      .replace(/^(?:\d+[\s.-]+)+/, '') // Remove leading numbers and separators
-      .replace(/^\[.*?\]\s*/, '') // Remove brackets and content
-      .trim();
+  private async fetchTrackMetadataRange(key: string): Promise<Blob|ReadableStream> {
+    // Grab first chunk of the file from S3
+    return await this.s3Service.fetchRange(key, 0, this.METADATA_BYTE_RANGE);
+  }
+
+  public async extractMetadata(metadataRange: Blob|ReadableStream): Promise<TrackMetadata> {
+    let metadata;
+    if(metadataRange instanceof Blob) {
+      metadata = await mm.parseBlob(metadataRange as Blob);
+    }
+    else {
+      metadata = await mm.parseWebStream(metadataRange as ReadableStream)
+    }
+    return Promise.resolve({
+      title: metadata.common.title,
+      artist: metadata.common.artist,
+      duration: metadata.format.duration || 0,
+      bitrate: metadata.format.bitrate || 0,
+    });
   }
 }

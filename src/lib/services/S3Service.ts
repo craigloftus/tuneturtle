@@ -119,6 +119,20 @@ export class S3Service {
     });
   }
 
+  public async fetchRange(key: string, start: number, end: number): Promise<Blob|ReadableStream> {
+    const { s3Client, bucket } = await this.getClientAndBucket();
+
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Range: `bytes=${start}-${end}`,
+    });
+
+    const response = await s3Client.send(command);
+
+    return response.Body as Blob|ReadableStream;
+  }
+
   public async listObjects(options: {
     continuationToken?: string;
     limit?: number;

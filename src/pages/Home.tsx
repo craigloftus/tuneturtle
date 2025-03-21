@@ -128,7 +128,7 @@ export function Home() {
     await writer.write(blob);
     await writer.close();
     
-    trackService.updateTrack(track.key, {
+    trackService.updateTrack({
       ...track,
       downloaded: true,
       localPath: trackUUID,
