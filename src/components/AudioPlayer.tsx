@@ -6,7 +6,7 @@ import { Play, Pause, Volume2 } from "lucide-react";
 import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
-import { formatTime } from "@/utils/formatters";
+import { formatTime, formatTrackName } from "@/utils/formatters";
 
 interface AudioPlayerProps {
   track: Track | null;
@@ -192,7 +192,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       <div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{track.key}</p>
+            <p className="text-sm font-medium truncate">{track.album} / {formatTrackName(track)}</p>
             <p className="text-xs text-muted-foreground">
               {formatTime(playerState.currentTime)} / {formatTime(playerState.duration)}
             </p>

@@ -3,6 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Check, Download, PlayCircle, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { formatTrackName } from "@/utils/formatters";
 
 interface TrackListProps {
   tracks: Track[];
@@ -79,19 +80,6 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
     return acc;
   }, {} as Record<string, Track[]>);
 
-  // Helper function to get display name for track
-  const getTrackDisplayName = (track: Track) => {
-    if (track?.metadata?.title) {
-      return track.metadata.title;
-    }
-    if (!track.fileName) {
-      // Fallback if fileName is not set
-      const parts = track.key.split('/');
-      return parts[parts.length - 1].replace(/\.[^/.]+$/, '');
-    }
-    return track.fileName;
-  };
-
   return (
     <ScrollArea className="h-[calc(100vh-16rem)] w-full rounded-md border">
       <div className="p-4 space-y-6">
@@ -102,11 +90,11 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
               <Button
                 key={track.key}
                 variant={currentTrack?.key === track.key ? "secondary" : "ghost"}
-                className="w-full justify-start"
+                className="w-full justify-start mr-2"
                 onClick={() => onSelect(track)}
               >
                 <PlayCircle className="mr-2 h-4 w-4" />
-                <span className="truncate">{getTrackDisplayName(track)}</span>
+                <span className="truncate">{formatTrackName(track)}</span>
               </Button>
               {track.localPath ? (
                 <Button
