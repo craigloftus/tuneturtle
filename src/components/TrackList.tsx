@@ -2,7 +2,7 @@ import { Track, Album } from "@/lib/services/TrackService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Check, Download, PlayCircle, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface TrackListProps {
   tracks: Track[];
@@ -10,9 +10,10 @@ interface TrackListProps {
   currentTrack: Track | null;
   selectedAlbum: Album | null;
   onDownloadTrack: (track: Track) => Promise<void>;
+  showLocalOnly?: boolean;
 }
 
-export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDownloadTrack }: TrackListProps) {
+export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDownloadTrack, showLocalOnly = false }: TrackListProps) {
   const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
 
   const handleDownload = async (track: Track) => {
@@ -37,9 +38,11 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
     }))
   });
 
-  // Filter tracks by selected album if one is selected
-  const filteredTracks = selectedAlbum
-    ? tracks.filter(track => {
+  // Filter tracks by selected album and local availability if needed
+  const filteredTracks = useMemo(() => {
+    // First filter by album if one is selected
+    const albumFiltered = selectedAlbum
+      ? tracks.filter(track => {
         const trackAlbum = track.album || '';
         const selectedAlbumName = selectedAlbum.name || '';
         
@@ -58,7 +61,13 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
         
         return matches;
       })
-    : tracks;
+      : tracks;
+    
+    // Then filter by local availability if the option is selected
+    return showLocalOnly
+      ? albumFiltered.filter(track => track.localPath)
+      : albumFiltered;
+  }, [tracks, selectedAlbum, showLocalOnly]);
 
   // Group tracks by album if no specific album is selected
   const tracksByAlbum = filteredTracks.reduce((acc, track) => {

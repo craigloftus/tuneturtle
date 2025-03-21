@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
-import { Grid, Settings, RefreshCw } from "lucide-react";
+import { Grid, Settings, RefreshCw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -14,6 +15,9 @@ interface HeaderProps {
   showViewControls?: boolean;
   showSettingsButton?: boolean;
   showRefreshButton?: boolean;
+  showLocalFilter?: boolean;
+  localFilterEnabled?: boolean;
+  onLocalFilterChange?: (enabled: boolean) => void;
 }
 
 export function Header({ 
@@ -22,6 +26,9 @@ export function Header({
   showViewControls = true,
   showSettingsButton = true,
   showRefreshButton = true,
+  showLocalFilter = false,
+  localFilterEnabled = false,
+  onLocalFilterChange,
 }: HeaderProps) {
   const [, navigate] = useLocation();
 
@@ -35,6 +42,24 @@ export function Header({
           </h1>
         </div>
         <div className="flex items-center space-x-3">
+          {showLocalFilter && onLocalFilterChange && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center space-x-2 px-2">
+                  <span className="text-muted-foreground">
+                    Downloaded
+                  </span>
+                  <Switch 
+                    checked={localFilterEnabled} 
+                    onCheckedChange={onLocalFilterChange} 
+                    aria-label="Toggle local tracks only"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Show downloaded tracks only</TooltipContent>
+            </Tooltip>
+          )}
+
           {showViewControls && viewMode !== undefined && onViewModeChange && (
             <>
               <Tooltip>
@@ -68,7 +93,6 @@ export function Header({
               <TooltipContent>Refresh Library</TooltipContent>
             </Tooltip>
           )}
-          
           {showSettingsButton && (
             <Tooltip>
               <TooltipTrigger asChild>

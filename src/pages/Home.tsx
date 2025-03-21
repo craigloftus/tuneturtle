@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft, CloudDownload } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -26,6 +26,7 @@ export function Home() {
     const cached = localStorage.getItem("viewMode");
     return (cached as ViewMode) || "grid";
   });
+  const [showLocalOnly, setShowLocalOnly] = useState<boolean>(false);
 
   const [albums, setAlbums] = useState<Album[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -37,6 +38,16 @@ export function Home() {
     : -1;
 
   const selectedAlbum = selectedAlbumIndex !== null ? albums[selectedAlbumIndex] : null;
+
+  // Filter albums based on local tracks availability
+  const filteredAlbums = useMemo(() => {
+    if (!showLocalOnly) return albums;
+    
+    // Only include albums that have at least one track with localPath
+    return albums.filter(album => 
+      album.tracks.some(track => track.localPath)
+    );
+  }, [albums, showLocalOnly]);
 
   useEffect(() => {
     localStorage.setItem("viewMode", viewMode);
@@ -156,10 +167,16 @@ export function Home() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header viewMode={viewMode} onViewModeChange={handleViewModeChange} />
+      <Header 
+        viewMode={viewMode} 
+        onViewModeChange={handleViewModeChange} 
+        showLocalFilter={true}
+        localFilterEnabled={showLocalOnly}
+        onLocalFilterChange={setShowLocalOnly}
+      />
 
       {selectedAlbum && (
-        <div className="mt-3 px-6 flex items-center gap-3">
+        <div className="container mx-auto px-6 mt-4 mb-2 flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -171,13 +188,18 @@ export function Home() {
           <h2 className="text-xl font-semibold truncate">
             {selectedAlbum.name}
           </h2>
-          <Button onClick={() => downloadAlbum(selectedAlbum.tracks)}>
-            <CloudDownload className="ml-2 h-4 w-4" />
+          <Button 
+            variant="outline"
+            size="icon"
+            onClick={() => downloadAlbum(selectedAlbum.tracks)}
+            className="ml-auto mr-4"
+          >
+            <Download className="h-4 w-4" />
           </Button>
         </div>
       )}
 
-      <div className="container mx-auto px-6 pb-32 mt-6">
+      <div className="container mx-auto px-6 pb-32 mt-2">
         <AnimatePresence mode="wait">
           <motion.div
             key={viewMode}
@@ -187,7 +209,7 @@ export function Home() {
             transition={{ duration: 0.2 }}
           >
             {viewMode === "grid" ? (
-              <AlbumGrid albums={albums} onTrackSelect={handleAlbumSelect} />
+              <AlbumGrid albums={filteredAlbums} onTrackSelect={handleAlbumSelect} />
             ) : (
               <TrackList
                 tracks={selectedAlbum ? selectedAlbum.tracks : tracks}
@@ -195,6 +217,7 @@ export function Home() {
                 currentTrack={currentTrack}
                 selectedAlbum={selectedAlbum}
                 onDownloadTrack={downloadTrack}
+                showLocalOnly={showLocalOnly}
               />
             )}
           </motion.div>
