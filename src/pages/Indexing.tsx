@@ -15,6 +15,7 @@ export function Indexing() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [isIndexing, setIsIndexing] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
 
   const createTrackFromS3Object = async (
@@ -39,6 +40,9 @@ export function Indexing() {
 
   useEffect(() => {
     let indexing = true;
+    const listingInterval = setInterval(() => {
+      setProgress(prev => (prev < 49 ? prev + 2 : prev));
+    }, 250);
 
     const startIndexing = async () => {
       // Check if S3 credentials are stored
@@ -57,15 +61,11 @@ export function Indexing() {
 
         // Call listObjects continually until nextContinuationToken is null
         let isTruncated = true;
-        let nextContinuationToken: string | undefined = undefined;
+        let nextContinuationToken = undefined;
         let maxKeys = 100;
 
         while (isTruncated) {
-          const {
-            objects,
-            nextContinuationToken: nextToken,
-            isTruncated: truncated,
-          } = await s3Service.listObjects({
+          const { objects, nextContinuationToken: nextToken, isTruncated: truncated } = await s3Service.listObjects({
             continuationToken: nextContinuationToken,
             limit: maxKeys,
           });
@@ -84,18 +84,27 @@ export function Indexing() {
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
 
+        // End of S3 listing phase: clear interval and set progress to 50%
+        clearInterval(listingInterval);
+        setProgress(50);
 
         // This feels like a hack, rather than the correct solution
         if(!indexing) return;
 
         // Save tracks to cache
-        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])))
+        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])));
 
-        // Process tracks in batches of n
-        for (const track of tracks) {
-          await trackService.populateTrackMetadata(track);
-          await new Promise((resolve) => setTimeout(resolve, 5));  // Relax our calm just a little?
-        };
+        // Process tracks concurrently in batches to speed up metadata population without overloading the device
+        const concurrencyLimit = 5;
+        let i = 0;
+        while (i < tracks.length) {
+          const chunk = tracks.slice(i, i + concurrencyLimit);
+          await Promise.all(chunk.map(track => trackService.populateTrackMetadata(track)));
+          i += chunk.length;
+          setProgress(50 + Math.round((i / tracks.length) * 50));
+          await new Promise((resolve) => setTimeout(resolve, 5));  // slight delay for UI update
+        }
+        setProgress(100);
 
         // Final progress update
         toast({
@@ -121,6 +130,7 @@ export function Indexing() {
 
     return () => {
       indexing = false;
+      clearInterval(listingInterval);
     };
   }, [navigate, toast]);
 
@@ -153,7 +163,12 @@ export function Indexing() {
               <InfoIcon className="h-5 w-5 text-blue-500" />
               <h3 className="text-xl font-semibold">Indexing in Progress</h3>
             </div>
-
+            <div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+              </div>
+              <p className="text-sm text-center mt-1">{progress}%</p>
+            </div>
             <div className="space-y-4">
               <div className="flex items-center justify-center">
                 {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
