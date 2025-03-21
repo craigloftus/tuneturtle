@@ -23,6 +23,7 @@ export interface Track {
   size: number;
   lastModified: Date;
   album: string;
+  artist: string;
   fileName: string;
   metadata?: TrackMetadata;
   downloaded?: boolean;
@@ -112,6 +113,7 @@ export class TrackService {
     return Promise.resolve({
       title: metadata.common.title,
       artist: metadata.common.artist,
+      album: metadata.common.album,
       duration: metadata.format.duration || 0,
       bitrate: metadata.format.bitrate || 0,
     });

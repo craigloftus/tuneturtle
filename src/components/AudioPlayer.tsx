@@ -172,7 +172,9 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   useEffect(() => {
     if ('mediaSession' in navigator && track) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: track.key,
+        title: formatTrackName(track),
+        album: track.album,
+        artist: track.artist,
         // Add more metadata if available
       });
 
