@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, Volume2 } from "lucide-react";
+import { Play, Pause, Volume2, SkipBack, SkipForward } from "lucide-react";
 import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
@@ -222,6 +222,14 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
             <Button
               variant="outline"
               size="icon"
+              onClick={onPrevious}
+              disabled={!!playerState.error}
+            >
+              <SkipBack className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
               onClick={togglePlayPause}
               disabled={!!playerState.error}
             >
@@ -230,6 +238,14 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
               ) : (
                 <Play className="h-4 w-4" />
               )}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onNext}
+              disabled={!!playerState.error}
+            >
+              <SkipForward className="h-4 w-4" />
             </Button>
           </div>
         </div>
