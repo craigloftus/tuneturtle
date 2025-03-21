@@ -12,19 +12,23 @@ interface TrackListProps {
   selectedAlbum: Album | null;
   onDownloadTrack: (track: Track) => Promise<void>;
   showLocalOnly?: boolean;
+  downloadingTrackKeys?: string[];
 }
 
-export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDownloadTrack, showLocalOnly = false }: TrackListProps) {
-  const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
-
+export function TrackList({ 
+  tracks, 
+  onSelect, 
+  currentTrack, 
+  selectedAlbum, 
+  onDownloadTrack, 
+  showLocalOnly = false,
+  downloadingTrackKeys = []
+}: TrackListProps) {
   const handleDownload = async (track: Track) => {
-    setDownloadingTrackKeys((prev) => [...prev, track.key]);
     try {
       await onDownloadTrack(track);
     } catch (error) {
       console.error('Download failed for track:', track, error);
-    } finally {
-      setDownloadingTrackKeys((prev) => prev.filter(key => key !== track.key));
     }
   };
 

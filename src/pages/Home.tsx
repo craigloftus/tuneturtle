@@ -3,7 +3,7 @@ import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,6 +32,8 @@ export function Home() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedAlbumIndex, setSelectedAlbumIndex] = useState<number | null>(null);
+  const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
+  const [isDownloadingAlbum, setIsDownloadingAlbum] = useState(false);
 
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.key === currentTrack.key)
@@ -147,21 +149,43 @@ export function Home() {
   }
   
   const downloadTrack = async (track: Track) => {
-    await handleDownload(track);
-    const cachedTracks = trackService.getTracks();
-    if (cachedTracks) {
-      setTracks(Object.values(cachedTracks));
+    setDownloadingTrackKeys((prev) => [...prev, track.key]);
+    try {
+      await handleDownload(track);
+      const cachedTracks = trackService.getTracks();
+      if (cachedTracks) {
+        setTracks(Object.values(cachedTracks));
+      }
+    } catch (error) {
+      console.error('Download failed for track:', track, error);
+    } finally {
+      setDownloadingTrackKeys((prev) => prev.filter(key => key !== track.key));
     }
   }
   
   const downloadAlbum = async (tracks: Track[]) => {
-    for (const track of tracks) {
-      await handleDownload(track);
-    }
-
-    const cachedTracks = trackService.getTracks();
-    if (cachedTracks) {
-      setTracks(Object.values(cachedTracks));
+    setIsDownloadingAlbum(true);
+    try {
+      // Add all tracks to downloadingTrackKeys
+      const trackKeys = tracks.map(track => track.key);
+      setDownloadingTrackKeys(prev => [...prev, ...trackKeys]);
+      
+      for (const track of tracks) {
+        if (!track.localPath) { // Only download if not already downloaded
+          await handleDownload(track);
+        }
+      }
+  
+      const cachedTracks = trackService.getTracks();
+      if (cachedTracks) {
+        setTracks(Object.values(cachedTracks));
+      }
+    } catch (error) {
+      console.error('Album download failed:', error);
+    } finally {
+      // Clear all album track keys from downloading state
+      setDownloadingTrackKeys(prev => prev.filter(key => !tracks.some(track => track.key === key)));
+      setIsDownloadingAlbum(false);
     }
   };
 
@@ -193,8 +217,13 @@ export function Home() {
             size="icon"
             onClick={() => downloadAlbum(selectedAlbum.tracks)}
             className="ml-auto mr-4"
+            disabled={isDownloadingAlbum || selectedAlbum.tracks.every(track => track.localPath)}
           >
-            <Download className="h-4 w-4" />
+            {isDownloadingAlbum ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
           </Button>
         </div>
       )}
@@ -218,6 +247,7 @@ export function Home() {
                 selectedAlbum={selectedAlbum}
                 onDownloadTrack={downloadTrack}
                 showLocalOnly={showLocalOnly}
+                downloadingTrackKeys={downloadingTrackKeys}
               />
             )}
           </motion.div>
