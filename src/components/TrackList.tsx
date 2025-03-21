@@ -1,7 +1,8 @@
 import { Track, Album } from "@/lib/services/TrackService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Check, Cloud, CloudDownload, Download, PlayCircle } from "lucide-react";
+import { Check, Download, PlayCircle, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 interface TrackListProps {
   tracks: Track[];
@@ -12,6 +13,19 @@ interface TrackListProps {
 }
 
 export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDownloadTrack }: TrackListProps) {
+  const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
+
+  const handleDownload = async (track: Track) => {
+    setDownloadingTrackKeys((prev) => [...prev, track.key]);
+    try {
+      await onDownloadTrack(track);
+    } catch (error) {
+      console.error('Download failed for track:', track, error);
+    } finally {
+      setDownloadingTrackKeys((prev) => prev.filter(key => key !== track.key));
+    }
+  };
+
   // Debug log input tracks
   console.debug('[TrackList] Initial data:', {
     totalTracks: tracks.length,
@@ -46,17 +60,6 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
       })
     : tracks;
 
-  // Debug log filtered tracks
-  console.debug('[TrackList] After filtering:', {
-    filteredCount: filteredTracks.length,
-    selectedAlbum: selectedAlbum?.name || 'All',
-    sampleTracks: filteredTracks.slice(0, 3).map(t => ({
-      key: t.key,
-      album: t.album,
-      fileName: t.fileName
-    }))
-  });
-
   // Group tracks by album if no specific album is selected
   const tracksByAlbum = filteredTracks.reduce((acc, track) => {
     const albumName = selectedAlbum ? 'tracks' : (track.album || 'Unknown');
@@ -66,15 +69,6 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
     acc[albumName].push(track);
     return acc;
   }, {} as Record<string, Track[]>);
-
-  // Debug log final grouping
-  console.debug('[TrackList] Final grouping:', 
-    Object.entries(tracksByAlbum).map(([album, tracks]) => ({
-      album,
-      trackCount: tracks.length,
-      sampleTrack: tracks[0]?.fileName
-    }))
-  );
 
   // Helper function to get display name for track
   const getTrackDisplayName = (track: Track) => {
@@ -105,15 +99,29 @@ export function TrackList({ tracks, onSelect, currentTrack, selectedAlbum, onDow
                 <PlayCircle className="mr-2 h-4 w-4" />
                 <span className="truncate">{getTrackDisplayName(track)}</span>
               </Button>
-              {track.localPath && (
-                <Check className="mr-2 h-4 w-4" />
-              )}
-              {!track.localPath && ( 
+              {track.localPath ? (
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => onDownloadTrack(track)}>
-                  <CloudDownload className="h-4 w-4" />
+                  disabled
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              ) : downloadingTrackKeys.includes(track.key) ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  disabled
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => handleDownload(track)}
+                >
+                  <Download className="h-4 w-4" />
                 </Button>
               )}
               </div>
