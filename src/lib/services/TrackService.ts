@@ -23,7 +23,6 @@ export interface Track {
   size: number;
   lastModified: Date;
   album: string;
-  artist: string;
   fileName: string;
   metadata?: TrackMetadata;
   downloaded?: boolean;

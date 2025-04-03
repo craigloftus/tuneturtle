@@ -174,7 +174,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: formatTrackName(track),
         album: track.album,
-        artist: track.artist,
+        artist: track.metadata?.artist,
         // Add more metadata if available
       });
 
