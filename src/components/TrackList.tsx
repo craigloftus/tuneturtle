@@ -1,7 +1,7 @@
 import { Track, Album } from "@/lib/services/TrackService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Check, Download, PlayCircle, Loader2 } from "lucide-react";
+import { Check, Download, PlayCircle, Loader2, Trash2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { formatTrackName } from "@/utils/formatters";
 
@@ -11,6 +11,7 @@ interface TrackListProps {
   currentTrack: Track | null;
   selectedAlbum: Album | null;
   onDownloadTrack: (track: Track) => Promise<void>;
+  onDeleteTrack: (track: Track) => Promise<void>;
   showLocalOnly?: boolean;
   downloadingTrackKeys?: string[];
 }
@@ -21,14 +22,25 @@ export function TrackList({
   currentTrack, 
   selectedAlbum, 
   onDownloadTrack, 
+  onDeleteTrack,
   showLocalOnly = false,
   downloadingTrackKeys = []
 }: TrackListProps) {
+  const [hoveredTrackKey, setHoveredTrackKey] = useState<string | null>(null);
+
   const handleDownload = async (track: Track) => {
     try {
       await onDownloadTrack(track);
     } catch (error) {
       console.error('Download failed for track:', track, error);
+    }
+  };
+
+  const handleDelete = async (track: Track) => {
+    try {
+      await onDeleteTrack(track);
+    } catch (error) {
+      console.error('Delete failed for track:', track, error);
     }
   };
 
@@ -43,36 +55,34 @@ export function TrackList({
     }))
   });
 
-  // Filter tracks by selected album and local availability if needed
+  // Filter tracks ONLY by selected album if needed
   const filteredTracks = useMemo(() => {
     // First filter by album if one is selected
     const albumFiltered = selectedAlbum
       ? tracks.filter(track => {
-        const trackAlbum = track.album || '';
-        const selectedAlbumName = selectedAlbum.name || '';
-        
-        // Normalize both strings for comparison
-        const normalizedTrackAlbum = trackAlbum.trim().toLowerCase();
-        const normalizedSelectedAlbum = selectedAlbumName.trim().toLowerCase();
-        
-        const matches = normalizedTrackAlbum === normalizedSelectedAlbum;
-        
-        console.debug('[TrackList] Track match:', {
-          key: track.key,
-          trackAlbum: normalizedTrackAlbum,
-          selectedAlbum: normalizedSelectedAlbum,
-          matches
-        });
-        
-        return matches;
-      })
+          const trackAlbum = track.album || '';
+          const selectedAlbumName = selectedAlbum.name || '';
+          
+          // Normalize both strings for comparison
+          const normalizedTrackAlbum = trackAlbum.trim().toLowerCase();
+          const normalizedSelectedAlbum = selectedAlbumName.trim().toLowerCase();
+          
+          const matches = normalizedTrackAlbum === normalizedSelectedAlbum;
+          
+          console.debug('[TrackList] Track match:', {
+            key: track.key,
+            trackAlbum: normalizedTrackAlbum,
+            selectedAlbum: normalizedSelectedAlbum,
+            matches
+          });
+          
+          return matches;
+        })
       : tracks;
     
-    // Then filter by local availability if the option is selected
-    return showLocalOnly
-      ? albumFiltered.filter(track => track.localPath)
-      : albumFiltered;
-  }, [tracks, selectedAlbum, showLocalOnly]);
+    // REMOVED local availability filter here
+    return albumFiltered;
+  }, [tracks, selectedAlbum]);
 
   // Group tracks by album if no specific album is selected
   const tracksByAlbum = filteredTracks.reduce((acc, track) => {
@@ -104,9 +114,16 @@ export function TrackList({
                 <Button
                   variant="outline"
                   size="icon"
-                  disabled
+                  onClick={() => handleDelete(track)}
+                  onMouseEnter={() => setHoveredTrackKey(track.key)}
+                  onMouseLeave={() => setHoveredTrackKey(null)}
+                  className="hover:bg-destructive/10 hover:text-destructive"
                 >
-                  <Check className="h-4 w-4" />
+                  {hoveredTrackKey === track.key ? (
+                    <Trash2 className="h-4 w-4" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
                 </Button>
               ) : downloadingTrackKeys.includes(track.key) ? (
                 <Button

@@ -3,7 +3,7 @@ import { TrackList } from "@/components/TrackList";
 import { AlbumGrid } from "@/components/AlbumGrid";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -34,6 +34,8 @@ export function Home() {
   const [selectedAlbumIndex, setSelectedAlbumIndex] = useState<number | null>(null);
   const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
   const [isDownloadingAlbum, setIsDownloadingAlbum] = useState(false);
+  const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
+  const [isHoveringAlbumAction, setIsHoveringAlbumAction] = useState(false);
 
   const currentIndex = currentTrack
     ? tracks.findIndex((t) => t.key === currentTrack.key)
@@ -189,6 +191,96 @@ export function Home() {
     }
   };
 
+  // Helper function to handle the core deletion logic
+  const performDelete = async (track: Track) => {
+    if (!track.localPath) return; // Only delete if localPath exists
+
+    try {
+      const root = await navigator.storage.getDirectory();
+      await root.removeEntry(track.localPath);
+      trackService.updateTrack({
+        ...track,
+        downloaded: false,
+        localPath: undefined,
+      });
+    } catch (error) {
+      console.error('Error removing file:', track.localPath, error);
+      // Optionally: show a toast message to the user
+      toast({
+        title: "Deletion Error",
+        description: `Could not delete track: ${track.metadata?.title || track.key}`,
+        variant: "destructive",
+      });
+      // Re-throw the error if needed for upstream handling
+      throw error; 
+    }
+  };
+
+  const deleteTrack = async (track: Track) => {
+    try {
+      await performDelete(track);
+      // Refresh tracks state from service after deletion
+      const cachedTracks = trackService.getTracks();
+      if (cachedTracks) {
+        setTracks(Object.values(cachedTracks));
+      }
+      // Optional: Show success toast
+      toast({
+        title: "Track Deleted",
+        description: `${track.metadata?.title || track.key} removed from local storage.`,
+      });
+    } catch (error) {
+      // Error is already logged in performDelete, potentially shown via toast
+      console.error('Delete failed for track:', track, error);
+    }
+  };
+
+  const deleteAlbum = async (tracksToDelete: Track[]) => {
+    setIsDeletingAlbum(true);
+    let deletedCount = 0;
+    try {
+      for (const track of tracksToDelete) {
+        if (track.localPath) { // Only attempt delete if it exists locally
+          await performDelete(track);
+          deletedCount++;
+        }
+      }
+
+      // Refresh tracks state after all deletions
+      const cachedTracks = trackService.getTracks();
+      if (cachedTracks) {
+        setTracks(Object.values(cachedTracks));
+      }
+
+      if (deletedCount > 0) {
+        toast({
+          title: "Album Files Deleted",
+          description: `${deletedCount} track(s) removed from local storage for ${selectedAlbum?.name}.`,
+        });
+      } else {
+         toast({
+          title: "No Files Deleted",
+          description: `No local files found to delete for ${selectedAlbum?.name}.`,
+          variant: "default"
+        });
+      }
+
+    } catch (error) {
+      console.error('Album deletion failed:', error);
+       toast({
+          title: "Album Deletion Error",
+          description: `An error occurred while deleting album files. Some files may remain.`,
+          variant: "destructive",
+        });
+    } finally {
+      setIsDeletingAlbum(false);
+    }
+  };
+
+  // Determine album download/delete state
+  const allTracksLocal = selectedAlbum ? selectedAlbum.tracks.every(track => !!track.localPath) : false;
+  const noTracksLocal = selectedAlbum ? !selectedAlbum.tracks.some(track => !!track.localPath) : true;
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
@@ -212,15 +304,24 @@ export function Home() {
           <h2 className="text-xl font-semibold truncate">
             {selectedAlbum.name}
           </h2>
-          <Button 
+          <Button
             variant="outline"
             size="icon"
-            onClick={() => downloadAlbum(selectedAlbum.tracks)}
-            className="ml-auto mr-4"
-            disabled={isDownloadingAlbum || selectedAlbum.tracks.every(track => track.localPath)}
+            onClick={() => {
+              if (selectedAlbum) {
+                allTracksLocal ? deleteAlbum(selectedAlbum.tracks) : downloadAlbum(selectedAlbum.tracks);
+              }
+            }}
+            className={`ml-auto mr-4 ${allTracksLocal ? 'hover:bg-destructive/10 hover:text-destructive' : ''}`}
+            disabled={isDownloadingAlbum || isDeletingAlbum || (allTracksLocal && noTracksLocal) }
+            title={allTracksLocal ? "Delete all downloaded tracks in album" : "Download all tracks in album"}
+            onMouseEnter={() => setIsHoveringAlbumAction(true)}
+            onMouseLeave={() => setIsHoveringAlbumAction(false)}
           >
-            {isDownloadingAlbum ? (
+            {isDownloadingAlbum || isDeletingAlbum ? (
               <Loader2 className="h-4 w-4 animate-spin" />
+            ) : allTracksLocal ? (
+              isHoveringAlbumAction ? <Trash2 className="h-4 w-4" /> : <Check className="h-4 w-4" />
             ) : (
               <Download className="h-4 w-4" />
             )}
@@ -246,7 +347,7 @@ export function Home() {
                 currentTrack={currentTrack}
                 selectedAlbum={selectedAlbum}
                 onDownloadTrack={downloadTrack}
-                showLocalOnly={showLocalOnly}
+                onDeleteTrack={deleteTrack}
                 downloadingTrackKeys={downloadingTrackKeys}
               />
             )}
