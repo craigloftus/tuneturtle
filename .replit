@@ -45,3 +45,9 @@ task = "packager.installForAll"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5173
+
+
+[[deployment.responseHeaders]]
+path = "/manifest.webmanifest"
+name = "Content-Type"
+value = "application/manifest+json"
