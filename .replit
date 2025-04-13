@@ -11,14 +11,6 @@ build = ["npm", "run", "build"]
 publicDir = "dist"
 run = ["sh", "-c", "npm run dev"]
 
-[[ports]]
-localPort = 5173
-externalPort = 80
-
-[[ports]]
-localPort = 5174
-externalPort = 3000
-
 [workflows]
 runButton = "Project"
 
@@ -46,8 +38,20 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5173
 
+[[ports]]
+localPort = 5173
+externalPort = 80
+
+[[ports]]
+localPort = 5174
+externalPort = 3000
 
 [[deployment.responseHeaders]]
 path = "/manifest.webmanifest"
 name = "Content-Type"
 value = "application/manifest+json"
+
+[[deployment.responseHeaders]]
+path = "/assets/*"
+name = "Cache-Control"
+value = "public, max-age=604800"
