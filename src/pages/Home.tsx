@@ -1,16 +1,17 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { TrackList } from "@/components/TrackList";
-import { AlbumGrid } from "@/components/AlbumGrid";
+import { AlbumList } from "@/components/AlbumList";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Loader2, Trash2, Check } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Trash2, Check, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Track, Album, TrackService } from "@/lib/services/TrackService";
+import { Track, Album, TrackService, findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
 import { S3Service } from "@/lib/services/S3Service";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
+import { StoredImage } from "@/components/StoredImage";
 
 
 const s3Service = S3Service.getInstance();
@@ -119,19 +120,25 @@ export function Home() {
     }
   };
 
-  const handleNext = () => {
-    if (currentIndex < tracks.length - 1) {
+  const handleNext = useCallback(() => {
+    const currentIndex = currentTrack
+      ? tracks.findIndex((t) => t.key === currentTrack.key)
+      : -1;
+    if (currentIndex !== -1 && currentIndex < tracks.length - 1) {
       setCurrentTrack(tracks[currentIndex + 1]);
     }
-  };
+  }, [currentTrack, tracks, setCurrentTrack]);
 
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
+  const handlePrevious = useCallback(() => {
+    const currentIndex = currentTrack
+      ? tracks.findIndex((t) => t.key === currentTrack.key)
+      : -1;
+    if (currentIndex !== -1 && currentIndex > 0) {
       setCurrentTrack(tracks[currentIndex - 1]);
     }
-  };
+  }, [currentTrack, tracks, setCurrentTrack]);
 
-  const handleDownload = async (track: Track) => {
+  const handleDownload = useCallback(async (track: Track) => {
     let trackUUID = self.crypto.randomUUID();
 
     const url = await s3Service.getSignedUrl(track.key);
@@ -148,9 +155,9 @@ export function Home() {
       downloaded: true,
       localPath: trackUUID,
     });
-  }
+  }, []);
   
-  const downloadTrack = async (track: Track) => {
+  const downloadTrack = useCallback(async (track: Track) => {
     setDownloadingTrackKeys((prev) => [...prev, track.key]);
     try {
       await handleDownload(track);
@@ -163,16 +170,16 @@ export function Home() {
     } finally {
       setDownloadingTrackKeys((prev) => prev.filter(key => key !== track.key));
     }
-  }
+  }, [handleDownload, setTracks]);
   
-  const downloadAlbum = async (tracks: Track[]) => {
+  const downloadAlbum = useCallback(async (tracksToDownload: Track[]) => {
     setIsDownloadingAlbum(true);
     try {
       // Add all tracks to downloadingTrackKeys
-      const trackKeys = tracks.map(track => track.key);
+      const trackKeys = tracksToDownload.map(track => track.key);
       setDownloadingTrackKeys(prev => [...prev, ...trackKeys]);
       
-      for (const track of tracks) {
+      for (const track of tracksToDownload) {
         if (!track.localPath) { // Only download if not already downloaded
           await handleDownload(track);
         }
@@ -186,13 +193,13 @@ export function Home() {
       console.error('Album download failed:', error);
     } finally {
       // Clear all album track keys from downloading state
-      setDownloadingTrackKeys(prev => prev.filter(key => !tracks.some(track => track.key === key)));
+      setDownloadingTrackKeys(prev => prev.filter(key => !tracksToDownload.some(track => track.key === key)));
       setIsDownloadingAlbum(false);
     }
-  };
+  }, [handleDownload, setTracks]);
 
   // Helper function to handle the core deletion logic
-  const performDelete = async (track: Track) => {
+  const performDelete = useCallback(async (track: Track) => {
     if (!track.localPath) return; // Only delete if localPath exists
 
     try {
@@ -214,9 +221,9 @@ export function Home() {
       // Re-throw the error if needed for upstream handling
       throw error; 
     }
-  };
+  }, [toast]);
 
-  const deleteTrack = async (track: Track) => {
+  const deleteTrack = useCallback(async (track: Track) => {
     try {
       await performDelete(track);
       // Refresh tracks state from service after deletion
@@ -233,9 +240,9 @@ export function Home() {
       // Error is already logged in performDelete, potentially shown via toast
       console.error('Delete failed for track:', track, error);
     }
-  };
+  }, [performDelete, setTracks, toast]);
 
-  const deleteAlbum = async (tracksToDelete: Track[]) => {
+  const deleteAlbum = useCallback(async (tracksToDelete: Track[]) => {
     setIsDeletingAlbum(true);
     let deletedCount = 0;
     try {
@@ -275,91 +282,132 @@ export function Home() {
     } finally {
       setIsDeletingAlbum(false);
     }
-  };
+  }, [performDelete, selectedAlbum, setTracks, toast]);
 
-  // Determine album download/delete state
-  const allTracksLocal = selectedAlbum ? selectedAlbum.tracks.every(track => !!track.localPath) : false;
-  const noTracksLocal = selectedAlbum ? !selectedAlbum.tracks.some(track => !!track.localPath) : true;
+  // Calculate values needed for rendering
+  const currentAlbumTracks = selectedAlbum ? selectedAlbum.tracks : tracks;
+  const allTracksDownloaded = selectedAlbum 
+    ? selectedAlbum.tracks.every(track => track.localPath) 
+    : false;
+  const albumArtUUID = selectedAlbum ? findAlbumArtUUID(selectedAlbum.tracks) : null;
+  const artistName = selectedAlbum ? findArtistName(selectedAlbum.tracks) : null;
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
-        viewMode={viewMode} 
-        onViewModeChange={handleViewModeChange} 
-        showLocalFilter={true}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        showLocalFilter={showLocalOnly}
         localFilterEnabled={showLocalOnly}
         onLocalFilterChange={setShowLocalOnly}
+        showBackButton={selectedAlbumIndex !== null}
+        onBack={handleBackToGrid}
+        showViewControls={selectedAlbumIndex === null}
       />
-
-      {selectedAlbum && (
-        <div className="container mx-auto px-6 mt-4 mb-2 flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleBackToGrid}
-            className="shrink-0 hover:bg-muted"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h2 className="text-xl font-semibold truncate">
-            {selectedAlbum.name}
-          </h2>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              if (selectedAlbum) {
-                allTracksLocal ? deleteAlbum(selectedAlbum.tracks) : downloadAlbum(selectedAlbum.tracks);
-              }
-            }}
-            className={`ml-auto mr-4 ${allTracksLocal ? 'hover:bg-destructive/10 hover:text-destructive' : ''}`}
-            disabled={isDownloadingAlbum || isDeletingAlbum || (allTracksLocal && noTracksLocal) }
-            title={allTracksLocal ? "Delete all downloaded tracks in album" : "Download all tracks in album"}
-            onMouseEnter={() => setIsHoveringAlbumAction(true)}
-            onMouseLeave={() => setIsHoveringAlbumAction(false)}
-          >
-            {isDownloadingAlbum || isDeletingAlbum ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : allTracksLocal ? (
-              isHoveringAlbumAction ? <Trash2 className="h-4 w-4" /> : <Check className="h-4 w-4" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      )}
-
-      <div className="container mx-auto px-6 pb-32 mt-2">
+      <main className="flex-grow container mx-auto p-0 md:p-6 mt-3 md:mt-0 overflow-y-auto">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={viewMode}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-          >
-            {viewMode === "grid" ? (
-              <AlbumGrid albums={filteredAlbums} onTrackSelect={handleAlbumSelect} />
-            ) : (
-              <TrackList
-                tracks={selectedAlbum ? selectedAlbum.tracks : tracks}
-                onSelect={setCurrentTrack}
-                currentTrack={currentTrack}
-                selectedAlbum={selectedAlbum}
-                onDownloadTrack={downloadTrack}
-                onDeleteTrack={deleteTrack}
-                downloadingTrackKeys={downloadingTrackKeys}
-              />
-            )}
-          </motion.div>
+          {viewMode === "grid" ? (
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AlbumList albums={filteredAlbums} onAlbumSelect={handleAlbumSelect} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="list"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="h-full flex flex-col"
+            >
+              {selectedAlbum && (
+                <div className="flex items-center justify-between p-4 border-b mb-2">
+                  <div className="flex items-center space-x-3">
+                    <Button variant="ghost" size="icon" onClick={handleBackToGrid} className="md:hidden">
+                      <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div className="flex-shrink-0 w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
+                      <StoredImage 
+                        fileUUID={albumArtUUID}
+                        alt={`${selectedAlbum.name} album art`} 
+                        className="w-full h-full object-cover" 
+                        placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
+                      />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold truncate">{selectedAlbum.name}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        {artistName && <span>{artistName}</span>}
+                        {artistName && selectedAlbum.tracks.length > 0 && <span className="mx-1">·</span>}
+                        {selectedAlbum.tracks.length > 0 && <span>{selectedAlbum.tracks.length} track{selectedAlbum.tracks.length !== 1 ? 's' : ''}</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <div 
+                    className="relative flex space-x-2"
+                    onMouseEnter={() => setIsHoveringAlbumAction(true)}
+                    onMouseLeave={() => setIsHoveringAlbumAction(false)}
+                  >
+                    {isDeletingAlbum ? (
+                      <Button variant="outline" size="icon" disabled>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </Button>
+                    ) : isDownloadingAlbum ? (
+                      <Button variant="outline" size="icon" disabled>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </Button>
+                    ) : allTracksDownloaded ? (
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => deleteAlbum(selectedAlbum.tracks)}
+                        className="hover:bg-destructive/10 hover:text-destructive"
+                        title="Delete all local tracks in album"
+                      >
+                         {isHoveringAlbumAction ? <Trash2 className="h-4 w-4" /> : <Check className="h-4 w-4 text-green-500" />}
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={() => downloadAlbum(selectedAlbum.tracks)}
+                        title="Download all tracks in album"
+                       >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex-grow overflow-y-auto">
+                <TrackList
+                  tracks={currentAlbumTracks}
+                  onSelect={setCurrentTrack}
+                  currentTrack={currentTrack}
+                  selectedAlbum={selectedAlbum}
+                  onDownloadTrack={downloadTrack}
+                  onDeleteTrack={deleteTrack}
+                  showLocalOnly={showLocalOnly}
+                  downloadingTrackKeys={downloadingTrackKeys}
+                />
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
-
+      </main>
+      {currentTrack && (
         <AudioPlayer
           track={currentTrack}
           onNext={handleNext}
           onPrevious={handlePrevious}
+          key={currentTrack.key}
         />
-      </div>
+      )}
     </div>
   );
 }

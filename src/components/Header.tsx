@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Grid, Settings, RefreshCw, Download } from "lucide-react";
+import { Grid, Settings, RefreshCw, Download, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -18,6 +18,8 @@ interface HeaderProps {
   showLocalFilter?: boolean;
   localFilterEnabled?: boolean;
   onLocalFilterChange?: (enabled: boolean) => void;
+  showBackButton?: boolean;
+  onBack?: () => void;
 }
 
 export function Header({ 
@@ -29,13 +31,30 @@ export function Header({
   showLocalFilter = false,
   localFilterEnabled = false,
   onLocalFilterChange,
+  showBackButton = false,
+  onBack,
 }: HeaderProps) {
   const [, navigate] = useLocation();
 
   return (
     <TooltipProvider>
-      <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-6 py-4 bg-gradient-to-r from-emerald-600/5 to-teal-700/5 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b border-emerald-600/10">
-        <div className="flex items-center">
+      <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-4 md:px-6 py-4 bg-gradient-to-r from-emerald-600/5 to-teal-700/5 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b border-emerald-600/10">
+        <div className="flex items-center space-x-2">
+          {showBackButton && onBack && (
+             <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onBack}
+                  className="hover:bg-muted hidden md:inline-flex"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back to Albums</TooltipContent>
+            </Tooltip>
+          )}
           <h1 className="text-2xl font-bold tracking-tight cursor-pointer" onClick={() => navigate("/")}>
             <span className="text-emerald-600 hover:text-emerald-500 transition-colors">Tune</span>
             <span className="text-emerald-400 hover:text-emerald-300 transition-colors">Turtle</span>

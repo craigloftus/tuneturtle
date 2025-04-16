@@ -1,5 +1,7 @@
 import * as mm from 'music-metadata';
 import { S3Service } from './S3Service';
+import albumArt from 'album-art';
+import { FileStorageService } from './FileStorageService';
 
 // Define supported audio formats and their MIME types
 const SUPPORTED_FORMATS = {
@@ -27,6 +29,7 @@ export interface Track {
   metadata?: TrackMetadata;
   downloaded?: boolean;
   localPath?: string;
+  albumArtPath?: string;
 }
 
 export interface Album {
@@ -36,6 +39,32 @@ export interface Album {
   selected?: boolean;
 }
 
+// Moved from AlbumList.tsx
+export const findAlbumArtUUID = (tracks: Track[]): string | null | undefined => {
+  const trackWithArt = tracks.find(track => track.albumArtPath);
+  return trackWithArt?.albumArtPath;
+};
+
+// Moved from AlbumList.tsx
+export const findArtistName = (tracks: Track[]): string | null | undefined => {
+  // Return early if no tracks or no tracks with artist metadata
+  if (!tracks.length) return undefined;
+  
+  const tracksWithArtist = tracks.filter(track => track.metadata?.artist);
+  if (!tracksWithArtist.length) return undefined;
+  
+  // Get the first artist to compare against
+  const firstArtist = tracksWithArtist[0].metadata?.artist;
+  
+  // Check if all tracks have the same artist
+  const allSameArtist = tracksWithArtist.every(
+    track => track.metadata?.artist === firstArtist
+  );
+  
+  // Return "Various Artists" if artists are different, otherwise return the common artist
+  return allSameArtist ? firstArtist : "Various Artists";
+};
+
 interface Tracks {
   [key: string]: Track;
 }
@@ -44,6 +73,7 @@ export class TrackService {
   private static instance: TrackService;
   private readonly METADATA_BYTE_RANGE = 5000;
   private s3Service = S3Service.getInstance();
+  private fileStorageService = FileStorageService.getInstance();
   private constructor() {}
 
   public static getInstance(): TrackService {
@@ -91,9 +121,63 @@ export class TrackService {
   }
 
   public async populateTrackMetadata(track: Track) {
-    const range = await this.fetchTrackMetadataRange(track.key);
-    track.metadata = await this.extractMetadata(range);
-    this.updateTrack(track);
+    let artIdToCheck: string | null = null; // Variable to hold the generated ID
+    let artExists = false;
+
+    try {
+      // 1. Populate basic metadata first
+      const range = await this.fetchTrackMetadataRange(track.key);
+      const metadata = await this.extractMetadata(range);
+      track.metadata = metadata;
+
+      // 2. Handle Album Art (Check Existence -> Fetch URL -> Download/Store)
+      if (metadata.artist && track.album && track.album !== 'Unknown Album') {
+        // Generate the deterministic ID
+        artIdToCheck = this.fileStorageService.generateAlbumArtId(metadata.artist, track.album);
+        
+        // Check if the art file already exists
+        try {
+          artExists = await this.fileStorageService.fileExists(artIdToCheck);
+          if (artExists) {
+            console.debug(`[TrackService] Album art for ${metadata.artist} - ${track.album} already exists as ${artIdToCheck}. Skipping download.`);
+            track.albumArtPath = artIdToCheck; // Assign existing ID
+          } else {
+            console.debug(`[TrackService] Album art for ${metadata.artist} - ${track.album} not found locally (${artIdToCheck}). Attempting fetch.`);
+            // Art doesn't exist, proceed to fetch URL and download
+            try {
+              const artUrl = await albumArt(metadata.artist, { album: track.album, size: 'large' });
+              console.debug(`[TrackService] Fetched album art URL: ${artUrl}`);
+              
+              // Download and store using the deterministic ID
+              const storedId = await this.fileStorageService.downloadAndStore(artUrl, artIdToCheck);
+              track.albumArtPath = storedId; // Assign the ID used for storage
+              console.debug(`[TrackService] Stored new album art as file ${storedId}`);
+            } catch (artError) {
+              console.warn(`[TrackService] Could not fetch/store album art for ${metadata.artist} - ${track.album}:`, artError);
+              // Keep albumArtPath undefined if fetch/store fails
+              track.albumArtPath = undefined;
+            }
+          }
+        } catch (checkError) {
+          console.error(`[TrackService] Error checking file existence for ${artIdToCheck}:`, checkError);
+          // Proceed cautiously: assume file doesn't exist and try to fetch/download
+          // This path is less likely if fileExists handles errors properly
+          track.albumArtPath = undefined; // Ensure path is undefined before potential download attempt
+        }
+      } else {
+         console.debug(`[TrackService] Skipping album art fetch for track ${track.key} due to missing artist/album.`);
+         track.albumArtPath = undefined; // Ensure it's undefined
+      }
+
+      // 3. Update track in storage (always happens after metadata/art attempt)
+      this.updateTrack(track);
+
+    } catch (error) {
+      console.error(`[TrackService] Error populating metadata/art for track ${track.key}:`, error);
+      // Optional: Decide if you still want to save partial data (e.g., if only art failed)
+      // Currently, if metadata extraction fails, nothing is saved. If art check/fetch fails, metadata is still saved.
+      // If track.metadata is populated, we could still call updateTrack(track) here.
+    }
   }
 
   private async fetchTrackMetadataRange(key: string): Promise<Blob|ReadableStream> {
@@ -107,14 +191,25 @@ export class TrackService {
       metadata = await mm.parseBlob(metadataRange as Blob);
     }
     else {
-      metadata = await mm.parseWebStream(metadataRange as ReadableStream)
+      // Make sure to handle potential errors during stream parsing
+      try {
+        metadata = await mm.parseWebStream(metadataRange as ReadableStream);
+      } catch (streamError) {
+        console.error('[TrackService] Error parsing metadata stream:', streamError);
+        // Return a default/empty metadata object or re-throw
+        return { duration: 0, bitrate: 0 }; 
+      }
     }
-    return Promise.resolve({
-      title: metadata.common.title,
-      artist: metadata.common.artist,
-      album: metadata.common.album,
-      duration: metadata.format.duration || 0,
-      bitrate: metadata.format.bitrate || 0,
-    });
+    
+    // Ensure metadata and common/format exist before accessing properties
+    const common = metadata?.common || {};
+    const format = metadata?.format || {};
+
+    return {
+      title: common.title,
+      artist: common.artist,
+      duration: format.duration || 0,
+      bitrate: format.bitrate || 0,
+    };
   }
 }
