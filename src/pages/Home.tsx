@@ -19,6 +19,11 @@ const trackService = TrackService.getInstance();
 
 type ViewMode = "grid" | "list";
 
+interface StorageEstimate {
+  usage: number;
+  quota: number;
+}
+
 export function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -27,7 +32,11 @@ export function Home() {
     const cached = localStorage.getItem("viewMode");
     return (cached as ViewMode) || "grid";
   });
-  const [showLocalOnly, setShowLocalOnly] = useState<boolean>(false);
+  const [showLocalOnly, setShowLocalOnly] = useState<boolean>(() => {
+    const cached = localStorage.getItem("showLocalOnly");
+    return cached === 'true';
+  });
+  const [storageEstimate, setStorageEstimate] = useState<StorageEstimate | null>(null);
 
   const [albums, setAlbums] = useState<Album[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -59,6 +68,10 @@ export function Home() {
   }, [viewMode]);
 
   useEffect(() => {
+    localStorage.setItem("showLocalOnly", String(showLocalOnly));
+  }, [showLocalOnly]);
+
+  useEffect(() => {
     const loadTracks = async () => {
       const cachedTracks = trackService.getTracks();
       if (cachedTracks) {
@@ -86,6 +99,25 @@ export function Home() {
 
     setAlbums(albums);
   }, [tracks]);
+
+  // Fetch storage estimate
+  useEffect(() => {
+    const getStorageEstimate = async () => {
+      if (navigator.storage && navigator.storage.estimate) {
+        try {
+          const estimate = await navigator.storage.estimate();
+          setStorageEstimate({
+            usage: estimate.usage ?? 0,
+            quota: estimate.quota ?? 0,
+          });
+        } catch (error) {
+          console.error("Error fetching storage estimate:", error);
+          // Handle error appropriately, maybe show a toast
+        }
+      }
+    };
+    getStorageEstimate();
+  }, []);
 
   if (error) {
     return (
@@ -297,7 +329,7 @@ export function Home() {
       <Header 
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
-        showLocalFilter={showLocalOnly}
+        showLocalFilter={true}
         localFilterEnabled={showLocalOnly}
         onLocalFilterChange={setShowLocalOnly}
         showBackButton={selectedAlbumIndex !== null}
@@ -314,7 +346,12 @@ export function Home() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <AlbumList albums={filteredAlbums} onAlbumSelect={handleAlbumSelect} />
+              <AlbumList 
+                albums={filteredAlbums} 
+                onAlbumSelect={handleAlbumSelect} 
+                showLocalOnly={showLocalOnly}
+                storageEstimate={storageEstimate}
+              />
             </motion.div>
           ) : (
             <motion.div

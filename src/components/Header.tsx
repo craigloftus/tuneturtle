@@ -1,7 +1,6 @@
 import { useLocation } from "wouter";
 import { Grid, Settings, RefreshCw, Download, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -64,18 +63,19 @@ export function Header({
           {showLocalFilter && onLocalFilterChange && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center space-x-2 px-2">
-                  <span className="text-muted-foreground">
-                    Downloaded
-                  </span>
-                  <Switch 
-                    checked={localFilterEnabled} 
-                    onCheckedChange={onLocalFilterChange} 
-                    aria-label="Toggle local tracks only"
-                  />
-                </div>
+                <Button
+                  variant={localFilterEnabled ? "secondary" : "ghost"}
+                  size="icon"
+                  onClick={() => onLocalFilterChange(!localFilterEnabled)}
+                  className="hover:bg-muted"
+                  aria-label="Toggle local tracks only"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
               </TooltipTrigger>
-              <TooltipContent>Show downloaded tracks only</TooltipContent>
+              <TooltipContent>
+                {localFilterEnabled ? "Show all tracks" : "Show downloaded tracks only"}
+              </TooltipContent>
             </Tooltip>
           )}
 

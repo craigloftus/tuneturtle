@@ -81,7 +81,7 @@ export function TrackList({
   }, [filteredTracks, selectedAlbum]);
 
   return (
-    <ScrollArea className="h-[calc(100vh-16rem)] w-full rounded-md border">
+    <ScrollArea className="h-[calc(100vh-16rem)] w-full rounded-md">
       <div className="p-4 space-y-6">
         {Object.entries(tracksByAlbum).map(([albumName, { tracks: groupTracks, artPath }]) => (
           <div key={albumName} className="space-y-3"> {/* Increased spacing */} 

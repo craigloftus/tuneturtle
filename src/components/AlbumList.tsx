@@ -1,15 +1,53 @@
 import { Album, Track, findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Music2 } from "lucide-react";
+import { Music2, Info } from "lucide-react";
 import { StoredImage } from "./StoredImage";
+import { formatBytes } from "@/lib/utils";
+
+interface StorageEstimate {
+  usage: number;
+  quota: number;
+}
 
 interface AlbumListProps {
   albums: Album[];
   onAlbumSelect: (album: Album) => void;
+  showLocalOnly?: boolean;
+  storageEstimate?: StorageEstimate | null;
 }
 
-export function AlbumList({ albums, onAlbumSelect }: AlbumListProps) {
+export function AlbumList({ 
+  albums, 
+  onAlbumSelect, 
+  showLocalOnly = false, 
+  storageEstimate = null 
+}: AlbumListProps) {
+
+  if (showLocalOnly && albums.length === 0) {
+    const usagePercent = storageEstimate && storageEstimate.quota > 0 
+      ? ((storageEstimate.usage / storageEstimate.quota) * 100).toFixed(1)
+      : 0;
+
+    return (
+      <div className="flex flex-col items-center justify-center text-center p-8 mt-10">
+        <Music2 className="w-16 h-16 text-muted-foreground mb-4" strokeWidth={1} />
+        <h3 className="text-lg font-semibold mb-1">No Downloaded Albums</h3>
+        <p className="text-muted-foreground mb-4">
+          You haven't downloaded any albums yet, or your filter excludes them.
+        </p>
+        {storageEstimate && storageEstimate.quota > 0 && (
+          <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md flex items-center space-x-2">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <span>
+              Using {formatBytes(storageEstimate.usage)} of {formatBytes(storageEstimate.quota)} ({usagePercent}%) storage space.
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col space-y-3 p-4">
       {albums.map((album) => {
