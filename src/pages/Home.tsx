@@ -3,7 +3,7 @@ import { TrackList } from "@/components/TrackList";
 import { AlbumList } from "@/components/AlbumList";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Loader2, Trash2, Check, Music2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Trash2, Check, Music2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,6 +12,7 @@ import { S3Service } from "@/lib/services/S3Service";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
 import { StoredImage } from "@/components/StoredImage";
+import { formatBytes } from "@/lib/utils";
 
 const s3Service = S3Service.getInstance();
 const trackService = TrackService.getInstance();
@@ -319,24 +320,55 @@ export function Home() {
     }
   }, [performDelete, selectedAlbum, setTracks, toast]);
 
+  // Helper to calculate usage percentage
+  const usagePercent = storageEstimate && storageEstimate.quota > 0 
+      ? ((storageEstimate.usage / storageEstimate.quota) * 100).toFixed(1)
+      : 0;
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header showLocalFilter={true} localFilterEnabled={showLocalOnly} onLocalFilterChange={setShowLocalOnly} />
       <main className="flex-grow container mx-auto px-4 md:px-6 py-6">
+        
+        {/* Display Storage Estimate when filter is active */}
+        {showLocalOnly && storageEstimate && storageEstimate.quota > 0 && (
+           <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md flex items-center space-x-2 mb-4 mx-auto max-w-md">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <span>
+              Using {formatBytes(storageEstimate.usage)} of {formatBytes(storageEstimate.quota)} ({usagePercent}%) storage space.
+            </span>
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
           {!selectedAlbumId ? (
-            <motion.div
-              key="album-list"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AlbumList 
-                albums={filteredAlbums} 
-                onAlbumSelect={handleAlbumSelect} 
-              />
-            </motion.div>
+            showLocalOnly && filteredAlbums.length === 0 ? (
+              <motion.div
+                key="empty-local-albums"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-10"
+              >
+                <Download className="w-12 h-12 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Downloaded Albums</h3>
+                <p>You haven't downloaded any albums yet.</p>
+                <p>Disable the filter above to see all albums.</p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="album-list"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <AlbumList 
+                  albums={filteredAlbums} 
+                  onAlbumSelect={handleAlbumSelect}
+                />
+              </motion.div>
+            )
           ) : selectedAlbum ? (
             <motion.div
               key={selectedAlbum.name}
