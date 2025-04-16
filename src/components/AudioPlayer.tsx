@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Play, Pause, Volume2, SkipBack, SkipForward } from "lucide-react";
+import { Play, Pause, Volume2, SkipBack, SkipForward, Music2 } from "lucide-react";
 import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
 import { S3Service } from "@/lib/services/S3Service";
+import { FileStorageService } from '@/lib/services/FileStorageService';
 import { formatTime, formatTrackName } from "@/utils/formatters";
+import { StoredImage } from "./StoredImage";
 
 interface AudioPlayerProps {
   track: Track | null;
@@ -15,9 +17,11 @@ interface AudioPlayerProps {
 }
 
 const s3Service = S3Service.getInstance();
+const fileStorageService = FileStorageService.getInstance();
 
 export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const artworkUrlRef = useRef<string | null>(null);
   const [playerState, setPlayerState] = useState({
     isPlaying: false,
     currentTime: 0,
@@ -170,20 +174,58 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
    };
 
   useEffect(() => {
-    if ('mediaSession' in navigator && track) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: formatTrackName(track),
-        album: track.album,
-        artist: track.metadata?.artist,
-        // Add more metadata if available
-      });
-
-      navigator.mediaSession.setActionHandler('play', togglePlayPause);
-      navigator.mediaSession.setActionHandler('pause', togglePlayPause);
-      navigator.mediaSession.setActionHandler('previoustrack', onPrevious);
-      navigator.mediaSession.setActionHandler('nexttrack', onNext);
+    // Cleanup previous artwork URL if it exists
+    if (artworkUrlRef.current) {
+      URL.revokeObjectURL(artworkUrlRef.current);
+      artworkUrlRef.current = null;
+      console.debug("[AudioPlayer MediaSession] Revoked previous artwork URL");
     }
-  }, [track]);
+
+    if ('mediaSession' in navigator && track) {
+      const setupMediaSession = async () => {
+        let artworkSrc: string | undefined = undefined;
+
+        if (track.albumArtPath) {
+          try {
+            console.debug(`[AudioPlayer MediaSession] Attempting to load artwork from path: ${track.albumArtPath}`);
+            const file = await fileStorageService.retrieveFile(track.albumArtPath);
+            artworkUrlRef.current = URL.createObjectURL(file); // Create and store new URL
+            artworkSrc = artworkUrlRef.current;
+            console.debug(`[AudioPlayer MediaSession] Created artwork object URL: ${artworkSrc}`);
+          } catch (err) {
+            console.error(`[AudioPlayer MediaSession] Failed to load artwork for path ${track.albumArtPath}:`, err);
+            // Keep artworkSrc undefined if loading fails
+          }
+        } else {
+           console.debug("[AudioPlayer MediaSession] No albumArtPath found for track.");
+        }
+
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: formatTrackName(track),
+          album: track.album,
+          artist: track.metadata?.artist,
+          artwork: artworkSrc ? [{ src: artworkSrc }] : undefined,
+        });
+
+        navigator.mediaSession.setActionHandler('play', togglePlayPause);
+        navigator.mediaSession.setActionHandler('pause', togglePlayPause);
+        navigator.mediaSession.setActionHandler('previoustrack', onPrevious);
+        navigator.mediaSession.setActionHandler('nexttrack', onNext);
+         console.debug("[AudioPlayer MediaSession] Media session metadata and handlers updated.");
+      };
+
+      setupMediaSession();
+    }
+
+    // Cleanup function for when the component unmounts or track changes
+    return () => {
+      if (artworkUrlRef.current) {
+        URL.revokeObjectURL(artworkUrlRef.current);
+        artworkUrlRef.current = null;
+        console.debug("[AudioPlayer MediaSession] Revoked artwork URL on cleanup.");
+      }
+    };
+  }, [track, onNext, onPrevious, togglePlayPause]);
 
   if (!track) return null;
 
@@ -192,12 +234,22 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       <audio ref={audioRef} preload="metadata" autoPlay />
 
       <div className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{track.album} / {formatTrackName(track)}</p>
-            <p className="text-xs text-muted-foreground">
-              {formatTime(playerState.currentTime)} / {formatTime(playerState.duration)}
-            </p>
+        <div className="flex items-center justify-between space-x-4">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-12 h-12 bg-muted rounded overflow-hidden">
+              <StoredImage
+                fileUUID={track.albumArtPath}
+                alt={track.album ? `${track.album} album art` : 'Album art'}
+                className="w-full h-full object-cover"
+                placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{track.album} / {formatTrackName(track)}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatTime(playerState.currentTime)} / {formatTime(playerState.duration)}
+              </p>
+            </div>
           </div>
           <div className="flex items-center space-x-2">
             <Volume2 className="h-4 w-4" />

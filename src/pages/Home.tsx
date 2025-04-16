@@ -13,11 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
 import { StoredImage } from "@/components/StoredImage";
 
-
 const s3Service = S3Service.getInstance();
 const trackService = TrackService.getInstance();
-
-type ViewMode = "grid" | "list";
 
 interface StorageEstimate {
   usage: number;
@@ -28,10 +25,10 @@ export function Home() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const cached = localStorage.getItem("viewMode");
-    return (cached as ViewMode) || "grid";
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(() => {
+    return localStorage.getItem("selectedAlbumId");
   });
+  const [playlistTracks, setPlaylistTracks] = useState<Track[]>([]);
   const [showLocalOnly, setShowLocalOnly] = useState<boolean>(() => {
     const cached = localStorage.getItem("showLocalOnly");
     return cached === 'true';
@@ -41,31 +38,45 @@ export function Home() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [selectedAlbumIndex, setSelectedAlbumIndex] = useState<number | null>(null);
   const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
   const [isDownloadingAlbum, setIsDownloadingAlbum] = useState(false);
   const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
   const [isHoveringAlbumAction, setIsHoveringAlbumAction] = useState(false);
 
+  const selectedAlbum = useMemo(() => 
+    albums.find(album => album.name === selectedAlbumId) || null,
+    [albums, selectedAlbumId]
+  );
+
+  const selectedAlbumTracks = useMemo(() => 
+    selectedAlbum ? selectedAlbum.tracks : [],
+    [selectedAlbum]
+  );
+
+  const selectedAlbumArtUUID = useMemo(() => 
+    selectedAlbum ? findAlbumArtUUID(selectedAlbum.tracks) : null,
+    [selectedAlbum]
+  );
+
   const currentIndex = currentTrack
-    ? tracks.findIndex((t) => t.key === currentTrack.key)
+    ? selectedAlbumTracks.findIndex((t) => t.key === currentTrack.key)
     : -1;
 
-  const selectedAlbum = selectedAlbumIndex !== null ? albums[selectedAlbumIndex] : null;
-
-  // Filter albums based on local tracks availability
   const filteredAlbums = useMemo(() => {
     if (!showLocalOnly) return albums;
     
-    // Only include albums that have at least one track with localPath
     return albums.filter(album => 
       album.tracks.some(track => track.localPath)
     );
   }, [albums, showLocalOnly]);
 
   useEffect(() => {
-    localStorage.setItem("viewMode", viewMode);
-  }, [viewMode]);
+    if (selectedAlbumId) {
+      localStorage.setItem("selectedAlbumId", selectedAlbumId);
+    } else {
+      localStorage.removeItem("selectedAlbumId");
+    }
+  }, [selectedAlbumId]);
 
   useEffect(() => {
     localStorage.setItem("showLocalOnly", String(showLocalOnly));
@@ -83,7 +94,6 @@ export function Home() {
   }, [toast]);
 
   useEffect(() => {
-    // Process tracks into albums with improved organization
     const albums = tracks.reduce((acc, track) => {
       const albumName = track.album || "Unknown Album";
       const existing = acc.find((a) => a.name === albumName);
@@ -100,7 +110,6 @@ export function Home() {
     setAlbums(albums);
   }, [tracks]);
 
-  // Fetch storage estimate
   useEffect(() => {
     const getStorageEstimate = async () => {
       if (navigator.storage && navigator.storage.estimate) {
@@ -112,7 +121,6 @@ export function Home() {
           });
         } catch (error) {
           console.error("Error fetching storage estimate:", error);
-          // Handle error appropriately, maybe show a toast
         }
       }
     };
@@ -122,7 +130,7 @@ export function Home() {
   if (error) {
     return (
       <div className="flex flex-col min-h-screen">
-        <Header showViewControls={false} />
+        <Header showLocalFilter={true} localFilterEnabled={showLocalOnly} onLocalFilterChange={setShowLocalOnly} />
         <div className="container mx-auto p-6 mt-20">
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -136,39 +144,43 @@ export function Home() {
   }
 
   const handleAlbumSelect = (album: Album) => {
-    setSelectedAlbumIndex(albums.findIndex(a => a.name === album.name));
-    setViewMode("list");
+    setSelectedAlbumId(album.name);
   };
 
-  const handleBackToGrid = () => {
-    setViewMode("grid");
-    setSelectedAlbumIndex(null);
+  const handleGoBackToAlbums = () => {
+    setSelectedAlbumId(null);
   };
 
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode);
-    if (mode === "grid") {
-      setSelectedAlbumIndex(null);
+  const handleTrackSelect = useCallback((track: Track) => {
+    setCurrentTrack(track);
+    if (selectedAlbum && selectedAlbum.tracks.some(t => t.key === track.key)) {
+      setPlaylistTracks(selectedAlbum.tracks); 
     }
-  };
+    else if (!selectedAlbum) {
+       const trackAlbum = albums.find(a => a.tracks.some(t => t.key === track.key));
+       if (trackAlbum) {
+         setPlaylistTracks(trackAlbum.tracks);
+       }
+    }
+  }, [selectedAlbum, albums]);
 
   const handleNext = useCallback(() => {
     const currentIndex = currentTrack
-      ? tracks.findIndex((t) => t.key === currentTrack.key)
+      ? playlistTracks.findIndex((t) => t.key === currentTrack.key)
       : -1;
-    if (currentIndex !== -1 && currentIndex < tracks.length - 1) {
-      setCurrentTrack(tracks[currentIndex + 1]);
+    if (currentIndex !== -1 && currentIndex < playlistTracks.length - 1) {
+      setCurrentTrack(playlistTracks[currentIndex + 1]);
     }
-  }, [currentTrack, tracks, setCurrentTrack]);
+  }, [currentTrack, playlistTracks, setCurrentTrack]);
 
   const handlePrevious = useCallback(() => {
     const currentIndex = currentTrack
-      ? tracks.findIndex((t) => t.key === currentTrack.key)
+      ? playlistTracks.findIndex((t) => t.key === currentTrack.key)
       : -1;
     if (currentIndex !== -1 && currentIndex > 0) {
-      setCurrentTrack(tracks[currentIndex - 1]);
+      setCurrentTrack(playlistTracks[currentIndex - 1]);
     }
-  }, [currentTrack, tracks, setCurrentTrack]);
+  }, [currentTrack, playlistTracks, setCurrentTrack]);
 
   const handleDownload = useCallback(async (track: Track) => {
     let trackUUID = self.crypto.randomUUID();
@@ -207,12 +219,11 @@ export function Home() {
   const downloadAlbum = useCallback(async (tracksToDownload: Track[]) => {
     setIsDownloadingAlbum(true);
     try {
-      // Add all tracks to downloadingTrackKeys
       const trackKeys = tracksToDownload.map(track => track.key);
       setDownloadingTrackKeys(prev => [...prev, ...trackKeys]);
       
       for (const track of tracksToDownload) {
-        if (!track.localPath) { // Only download if not already downloaded
+        if (!track.localPath) {
           await handleDownload(track);
         }
       }
@@ -224,15 +235,13 @@ export function Home() {
     } catch (error) {
       console.error('Album download failed:', error);
     } finally {
-      // Clear all album track keys from downloading state
       setDownloadingTrackKeys(prev => prev.filter(key => !tracksToDownload.some(track => track.key === key)));
       setIsDownloadingAlbum(false);
     }
   }, [handleDownload, setTracks]);
 
-  // Helper function to handle the core deletion logic
   const performDelete = useCallback(async (track: Track) => {
-    if (!track.localPath) return; // Only delete if localPath exists
+    if (!track.localPath) return;
 
     try {
       const root = await navigator.storage.getDirectory();
@@ -244,13 +253,11 @@ export function Home() {
       });
     } catch (error) {
       console.error('Error removing file:', track.localPath, error);
-      // Optionally: show a toast message to the user
       toast({
         title: "Deletion Error",
         description: `Could not delete track: ${track.metadata?.title || track.key}`,
         variant: "destructive",
       });
-      // Re-throw the error if needed for upstream handling
       throw error; 
     }
   }, [toast]);
@@ -258,18 +265,15 @@ export function Home() {
   const deleteTrack = useCallback(async (track: Track) => {
     try {
       await performDelete(track);
-      // Refresh tracks state from service after deletion
       const cachedTracks = trackService.getTracks();
       if (cachedTracks) {
         setTracks(Object.values(cachedTracks));
       }
-      // Optional: Show success toast
       toast({
         title: "Track Deleted",
         description: `${track.metadata?.title || track.key} removed from local storage.`,
       });
     } catch (error) {
-      // Error is already logged in performDelete, potentially shown via toast
       console.error('Delete failed for track:', track, error);
     }
   }, [performDelete, setTracks, toast]);
@@ -279,13 +283,12 @@ export function Home() {
     let deletedCount = 0;
     try {
       for (const track of tracksToDelete) {
-        if (track.localPath) { // Only attempt delete if it exists locally
+        if (track.localPath) {
           await performDelete(track);
           deletedCount++;
         }
       }
 
-      // Refresh tracks state after all deletions
       const cachedTracks = trackService.getTracks();
       if (cachedTracks) {
         setTracks(Object.values(cachedTracks));
@@ -316,31 +319,14 @@ export function Home() {
     }
   }, [performDelete, selectedAlbum, setTracks, toast]);
 
-  // Calculate values needed for rendering
-  const currentAlbumTracks = selectedAlbum ? selectedAlbum.tracks : tracks;
-  const allTracksDownloaded = selectedAlbum 
-    ? selectedAlbum.tracks.every(track => track.localPath) 
-    : false;
-  const albumArtUUID = selectedAlbum ? findAlbumArtUUID(selectedAlbum.tracks) : null;
-  const artistName = selectedAlbum ? findArtistName(selectedAlbum.tracks) : null;
-
   return (
     <div className="flex flex-col min-h-screen">
-      <Header 
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
-        showLocalFilter={true}
-        localFilterEnabled={showLocalOnly}
-        onLocalFilterChange={setShowLocalOnly}
-        showBackButton={selectedAlbumIndex !== null}
-        onBack={handleBackToGrid}
-        showViewControls={selectedAlbumIndex === null}
-      />
-      <main className="flex-grow container mx-auto p-0 md:p-6 mt-3 md:mt-0 overflow-y-auto">
+      <Header showLocalFilter={true} localFilterEnabled={showLocalOnly} onLocalFilterChange={setShowLocalOnly} />
+      <main className="flex-grow container mx-auto px-4 md:px-6 py-6">
         <AnimatePresence mode="wait">
-          {viewMode === "grid" ? (
+          {!selectedAlbumId ? (
             <motion.div
-              key="grid"
+              key="album-list"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -349,100 +335,74 @@ export function Home() {
               <AlbumList 
                 albums={filteredAlbums} 
                 onAlbumSelect={handleAlbumSelect} 
-                showLocalOnly={showLocalOnly}
-                storageEstimate={storageEstimate}
               />
             </motion.div>
-          ) : (
+          ) : selectedAlbum ? (
             <motion.div
-              key="list"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="h-full flex flex-col"
+              key={selectedAlbum.name}
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col h-full"
             >
-              {selectedAlbum && (
-                <div className="flex items-center justify-between p-4 border-b mb-2">
-                  <div className="flex items-center space-x-3">
-                    <Button variant="ghost" size="icon" onClick={handleBackToGrid} className="md:hidden">
-                      <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                    <div className="flex-shrink-0 w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
-                      <StoredImage 
-                        fileUUID={albumArtUUID}
-                        alt={`${selectedAlbum.name} album art`} 
-                        className="w-full h-full object-cover" 
-                        placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
-                      />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold truncate">{selectedAlbum.name}</h2>
-                      <p className="text-sm text-muted-foreground">
-                        {artistName && <span>{artistName}</span>}
-                        {artistName && selectedAlbum.tracks.length > 0 && <span className="mx-1">·</span>}
-                        {selectedAlbum.tracks.length > 0 && <span>{selectedAlbum.tracks.length} track{selectedAlbum.tracks.length !== 1 ? 's' : ''}</span>}
-                      </p>
-                    </div>
-                  </div>
-                  <div 
-                    className="relative flex space-x-2"
-                    onMouseEnter={() => setIsHoveringAlbumAction(true)}
-                    onMouseLeave={() => setIsHoveringAlbumAction(false)}
-                  >
-                    {isDeletingAlbum ? (
-                      <Button variant="outline" size="icon" disabled>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </Button>
-                    ) : isDownloadingAlbum ? (
-                      <Button variant="outline" size="icon" disabled>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </Button>
-                    ) : allTracksDownloaded ? (
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        onClick={() => deleteAlbum(selectedAlbum.tracks)}
-                        className="hover:bg-destructive/10 hover:text-destructive"
-                        title="Delete all local tracks in album"
-                      >
-                         {isHoveringAlbumAction ? <Trash2 className="h-4 w-4" /> : <Check className="h-4 w-4 text-green-500" />}
-                      </Button>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        size="icon" 
-                        onClick={() => downloadAlbum(selectedAlbum.tracks)}
-                        title="Download all tracks in album"
-                       >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
+              <div className="flex items-center mb-4 gap-3 p-2 rounded-lg bg-gradient-to-r from-emerald-600/5 to-teal-700/5 border border-emerald-600/10">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleGoBackToAlbums} 
+                  className="hover:bg-muted flex-shrink-0"
+                  aria-label="Back to albums"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <StoredImage 
+                    fileUUID={selectedAlbumArtUUID}
+                    alt={`${selectedAlbum.name} cover`}
+                    className="w-16 h-16 object-cover rounded-md flex-shrink-0"
+                    placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
+                  />
+                  <div className="flex-grow overflow-hidden">
+                    <h2 className="text-xl font-semibold truncate" title={selectedAlbum.name}>
+                      {selectedAlbum.name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {findArtistName(selectedAlbum.tracks) || "Unknown Artist"}
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
+              
               <div className="flex-grow overflow-y-auto">
                 <TrackList
-                  tracks={currentAlbumTracks}
-                  onSelect={setCurrentTrack}
+                  tracks={selectedAlbumTracks}
                   currentTrack={currentTrack}
                   selectedAlbum={selectedAlbum}
+                  onSelect={handleTrackSelect}
                   onDownloadTrack={downloadTrack}
-                  onDeleteTrack={deleteTrack}
-                  showLocalOnly={showLocalOnly}
                   downloadingTrackKeys={downloadingTrackKeys}
+                  onDeleteTrack={deleteTrack}
                 />
               </div>
             </motion.div>
-          )}
+          ) : (
+             <motion.div key="loading-album" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+               <div className="flex flex-col items-center justify-center h-full">
+                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                 <p>Loading album...</p> 
+               </div>
+             </motion.div>
+           )
+          }
         </AnimatePresence>
       </main>
-      {currentTrack && (
+
+      {currentTrack !== null && (
         <AudioPlayer
           track={currentTrack}
           onNext={handleNext}
           onPrevious={handlePrevious}
-          key={currentTrack.key}
         />
       )}
     </div>

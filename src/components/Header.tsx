@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Grid, Settings, RefreshCw, Download, ArrowLeft } from "lucide-react";
+import { Settings, RefreshCw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -9,29 +9,19 @@ import {
 } from "@/components/ui/tooltip";
 
 interface HeaderProps {
-  viewMode?: "grid" | "list";
-  onViewModeChange?: (mode: "grid" | "list") => void;
-  showViewControls?: boolean;
   showSettingsButton?: boolean;
   showRefreshButton?: boolean;
   showLocalFilter?: boolean;
   localFilterEnabled?: boolean;
   onLocalFilterChange?: (enabled: boolean) => void;
-  showBackButton?: boolean;
-  onBack?: () => void;
 }
 
 export function Header({ 
-  viewMode, 
-  onViewModeChange, 
-  showViewControls = true,
   showSettingsButton = true,
   showRefreshButton = true,
   showLocalFilter = false,
   localFilterEnabled = false,
   onLocalFilterChange,
-  showBackButton = false,
-  onBack,
 }: HeaderProps) {
   const [, navigate] = useLocation();
 
@@ -39,21 +29,6 @@ export function Header({
     <TooltipProvider>
       <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-4 md:px-6 py-4 bg-gradient-to-r from-emerald-600/5 to-teal-700/5 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b border-emerald-600/10">
         <div className="flex items-center space-x-2">
-          {showBackButton && onBack && (
-             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onBack}
-                  className="hover:bg-muted hidden md:inline-flex"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Back to Albums</TooltipContent>
-            </Tooltip>
-          )}
           <h1 className="text-2xl font-bold tracking-tight cursor-pointer" onClick={() => navigate("/")}>
             <span className="text-emerald-600 hover:text-emerald-500 transition-colors">Tune</span>
             <span className="text-emerald-400 hover:text-emerald-300 transition-colors">Turtle</span>
@@ -77,24 +52,6 @@ export function Header({
                 {localFilterEnabled ? "Show all tracks" : "Show downloaded tracks only"}
               </TooltipContent>
             </Tooltip>
-          )}
-
-          {showViewControls && viewMode !== undefined && onViewModeChange && (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={viewMode === "grid" ? "secondary" : "ghost"}
-                    size="icon"
-                    onClick={() => onViewModeChange("grid")}
-                    className="hover:bg-muted"
-                  >
-                    <Grid className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Grid View</TooltipContent>
-              </Tooltip>
-            </>
           )}
           
           {showRefreshButton && (
