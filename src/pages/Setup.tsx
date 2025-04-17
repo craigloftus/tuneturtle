@@ -36,7 +36,6 @@ export function Setup() {
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
-        showViewControls={false} 
         showRefreshButton={false}
         showSettingsButton={false}
       />

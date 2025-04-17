@@ -137,7 +137,7 @@ export function Indexing() {
   if (error) {
     return (
       <div className="flex flex-col min-h-screen">
-        <Header showViewControls={false} showRefreshButton={false} />
+        <Header showRefreshButton={false} />
         <div className="container mx-auto p-6 mt-20">
           <h2 className="text-2xl font-bold mb-4">Indexing Error</h2>
           <Alert variant="destructive">
@@ -155,7 +155,7 @@ export function Indexing() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header showViewControls={false} showRefreshButton={false} />
+      <Header showRefreshButton={false} />
       <div className="container mx-auto p-6 mt-3">
         <Card className="p-6 max-w-2xl mx-auto">
           <div className="space-y-6">

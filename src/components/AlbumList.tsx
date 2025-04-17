@@ -1,7 +1,7 @@
-import { Album, Track, findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
+import { Album, findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Music2, Info } from "lucide-react";
+import { Music2 } from "lucide-react";
 import { StoredImage } from "./StoredImage";
 
 interface AlbumListProps {

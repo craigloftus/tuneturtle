@@ -3,7 +3,7 @@ import { TrackList } from "@/components/TrackList";
 import { AlbumList } from "@/components/AlbumList";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Loader2, Trash2, Check, Music2, Info } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Music2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
