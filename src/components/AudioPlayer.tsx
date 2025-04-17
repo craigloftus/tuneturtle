@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -119,7 +119,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
     };
   }, [track, onNext, toast]);
 
-  const togglePlayPause = async (): Promise<void> => {
+  const togglePlayPause = useCallback(async (): Promise<void> => {
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -136,7 +136,7 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
       console.error(errorMessage, err);
       setPlayerState(prev => ({ ...prev, error: errorMessage, isPlaying: false }));
     }
-  };
+  }, []);
 
   const handleSeek = (value: number[]): void => {
     const audio = audioRef.current;
