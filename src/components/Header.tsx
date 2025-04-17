@@ -29,6 +29,7 @@ export function Header({
     <TooltipProvider>
       <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-4 md:px-6 py-4 bg-gradient-to-r from-emerald-600/5 to-teal-700/5 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b border-emerald-600/10">
         <div className="flex items-center space-x-2">
+          <img src="/static/base_turtle.png" alt="Tune Turtle Logo" className="h-8 w-auto cursor-pointer" onClick={() => navigate("/")} />
           <h1 className="text-2xl font-bold tracking-tight cursor-pointer" onClick={() => navigate("/")}>
             <span className="text-emerald-600 hover:text-emerald-500 transition-colors">Tune</span>
             <span className="text-emerald-400 hover:text-emerald-300 transition-colors">Turtle</span>
