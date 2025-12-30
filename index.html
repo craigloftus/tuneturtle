@@ -11,85 +11,11 @@
     <link rel="icon" type="image/png" href="/static/favicon-96.png" sizes="96x96" />
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="shortcut icon" href="/static/favicon.ico" />
-    <style>
-      html {
-        font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-          "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-        line-height: 1.5;
-      }
-
-      body {
-        margin: 0;
-      }
-
-      #splash-screen {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(to bottom right, #059669, #0d9488);
-        opacity: 1;
-        transition: opacity 0.3s ease-in-out;
-        z-index: 9999;
-      }
-      #splash-screen.fade-out {
-        opacity: 0;
-      }
-      .splash-content {
-        text-align: center;
-        color: white;
-      }
-      .splash-title {
-        font-size: 4rem;
-        font-weight: bold;
-        letter-spacing: -0.025em;
-        line-height: 1;
-        font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          "Helvetica Neue",
-          Arial,
-          sans-serif;
-        margin: 0;
-      }
-      .splash-title span:first-child {
-        color: #34d399;
-      }
-      .splash-title span:last-child {
-        color: #fff;
-      }
-      .setup-button {
-        display: none;
-        margin-top: 2rem;
-        padding: 0.75rem 1.5rem;
-        background-color: #34d399;
-        color: white;
-        border: none;
-        border-radius: 0.375rem;
-        font-family: sans-serif;
-        font-size: 1rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background-color 0.2s;
-        line-height: inherit;
-      }
-      .setup-button:hover {
-        background-color: #10b981;
-      }
-      .splash-logo {
-        width: 250px;
-        height: 250px;
-      }
-    </style>
   </head>
   <body>
     <div id="splash-screen">
       <div class="splash-content">
-        <img src="/static/base_turtle.png" alt="Tune Turtle Logo" class="splash-logo">
+        <img src="data:image/avif;base64,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" alt="Tune Turtle Logo" class="splash-logo" width="250" height="250" fetchpriority="high">
         <h1 class="splash-title"><span>Tune</span><span>Turtle</span></h1>
       </div>
     </div>
@@ -98,12 +24,18 @@
       (function () {
         const splashScreen = document.getElementById("splash-screen");
         if (!splashScreen) return;
+        const minDisplayMs = 500;
+        const startTime = performance.now();
 
         const hideSplash = () => {
-          splashScreen.classList.add("fade-out");
+          const elapsed = performance.now() - startTime;
+          const delay = Math.max(0, minDisplayMs - elapsed);
           setTimeout(() => {
-            splashScreen.style.display = "none";
-          }, 300);
+            splashScreen.classList.add("fade-out");
+            setTimeout(() => {
+              splashScreen.style.display = "none";
+            }, 300);
+          }, delay);
         };
 
         window.addEventListener("app-ready", hideSplash, { once: true });

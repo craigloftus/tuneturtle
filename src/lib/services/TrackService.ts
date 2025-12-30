@@ -1,7 +1,4 @@
-import * as mm from 'music-metadata';
 import { S3Service } from './S3Service';
-// @ts-expect-error - no types for this package
-import albumArt from 'album-art';
 import { FileStorageService } from './FileStorageService';
 
 // Define supported audio formats and their MIME types
@@ -146,6 +143,7 @@ export class TrackService {
             console.debug(`[TrackService] Album art for ${metadata.artist} - ${track.album} not found locally (${artIdToCheck}). Attempting fetch.`);
             // Art doesn't exist, proceed to fetch URL and download
             try {
+              const { default: albumArt } = await import('album-art');
               const artUrl = await albumArt(metadata.artist, { album: track.album, size: 'large' });
               console.debug(`[TrackService] Fetched album art URL: ${artUrl}`);
               
@@ -187,6 +185,7 @@ export class TrackService {
   }
 
   public async extractMetadata(metadataRange: Blob|ReadableStream): Promise<TrackMetadata> {
+    const mm = await import('music-metadata');
     let metadata;
     if(metadataRange instanceof Blob) {
       metadata = await mm.parseBlob(metadataRange as Blob);

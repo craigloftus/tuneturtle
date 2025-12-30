@@ -1,14 +1,26 @@
-import { StrictMode, useEffect } from "react";
+import { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { Switch, Route } from "wouter";
 import "./index.css";
-import { SWRConfig } from "swr";
-import { fetcher } from "./lib/fetcher";
-import { Toaster } from "./components/ui/toaster";
-import { Home } from "./pages/Home";
-import { Setup } from "./pages/Setup";
-import { Indexing } from "./pages/Indexing";
 import { registerSW } from "virtual:pwa-register";
+import { useToast } from "@/hooks/use-toast";
+
+import { Home } from "./pages/Home";
+const Setup = lazy(() => import("./pages/Setup").then((module) => ({ default: module.Setup })));
+const Indexing = lazy(() => import("./pages/Indexing").then((module) => ({ default: module.Indexing })));
+const LazyToaster = lazy(() => import("./components/ui/toaster").then((module) => ({ default: module.Toaster })));
+
+function ToastSlot() {
+  const { toasts } = useToast();
+
+  if (!toasts.length) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <LazyToaster />
+    </Suspense>
+  );
+}
 
 function App() {
   useEffect(() => {
@@ -16,15 +28,23 @@ function App() {
   }, []);
 
   return (
-    <SWRConfig value={{ fetcher }}>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/setup" component={Setup} />
-        <Route path="/indexing" component={Indexing} />
-        <Route>404 Page Not Found</Route>
-      </Switch>
-      <Toaster />
-    </SWRConfig>
+    <>
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+            Loading...
+          </div>
+        }
+      >
+        <Switch>
+          <Route path="/" component={Home} />
+          <Route path="/setup" component={Setup} />
+          <Route path="/indexing" component={Indexing} />
+          <Route>404 Page Not Found</Route>
+        </Switch>
+      </Suspense>
+      <ToastSlot />
+    </>
   );
 }
 

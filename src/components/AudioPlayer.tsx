@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Play, Pause, Volume2, SkipBack, SkipForward, Music2 } from "lucide-react";
 import { Track } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
-import { S3Service } from "@/lib/services/S3Service";
 import { FileStorageService } from '@/lib/services/FileStorageService';
 import { formatTime, formatTrackName } from "@/utils/formatters";
 import { StoredImage } from "./StoredImage";
@@ -16,7 +15,6 @@ interface AudioPlayerProps {
   onPrevious: () => void | null;
 }
 
-const s3Service = S3Service.getInstance();
 const fileStorageService = FileStorageService.getInstance();
 
 export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
@@ -102,6 +100,8 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
         localURL = URL.createObjectURL(trackFile);
         audio.src = localURL;
       } else {
+        const { S3Service } = await import("@/lib/services/S3Service");
+        const s3Service = S3Service.getInstance();
         audio.src = await s3Service.getSignedUrl(track.key);
       }
       audio.load();

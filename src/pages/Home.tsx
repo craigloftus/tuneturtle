@@ -1,20 +1,18 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { TrackList } from "@/components/TrackList";
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { AlbumList } from "@/components/AlbumList";
-import { AudioPlayer } from "@/components/AudioPlayer";
 import { useLocation } from "wouter";
 import { ArrowLeft, Download, Loader2, Music2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AnimatePresence, motion } from "framer-motion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Track, Album, TrackService, findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
-import { S3Service } from "@/lib/services/S3Service";
 import { useToast } from "@/hooks/use-toast";
 import { Header } from "@/components/Header";
 import { StoredImage } from "@/components/StoredImage";
 import { formatBytes } from "@/lib/utils";
 
-const s3Service = S3Service.getInstance();
+const TrackList = lazy(() => import("@/components/TrackList").then((module) => ({ default: module.TrackList })));
+const AudioPlayer = lazy(() => import("@/components/AudioPlayer").then((module) => ({ default: module.AudioPlayer })));
+
 const trackService = TrackService.getInstance();
 
 interface StorageEstimate {
@@ -45,6 +43,10 @@ export function Home() {
     albums.find(album => album.name === selectedAlbumId) || null,
     [albums, selectedAlbumId]
   );
+
+  const hasCredentials = useMemo(() => {
+    return Boolean(localStorage.getItem("aws_credentials"));
+  }, []);
 
   const selectedAlbumTracks = useMemo(() => 
     selectedAlbum ? selectedAlbum.tracks : [],
@@ -179,6 +181,8 @@ export function Home() {
   const handleDownload = useCallback(async (track: Track) => {
     const trackUUID = self.crypto.randomUUID();
 
+    const { S3Service } = await import("@/lib/services/S3Service");
+    const s3Service = S3Service.getInstance();
     const url = await s3Service.getSignedUrl(track.key);
     const resp = await fetch(url);
     const blob = await resp.blob();
@@ -268,73 +272,62 @@ export function Home() {
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          {!selectedAlbumId ? (
-            showLocalOnly && filteredAlbums.length === 0 ? (
-              <motion.div
-                key="empty-local-albums"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-10"
+        {!selectedAlbumId ? (
+          showLocalOnly && filteredAlbums.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground pt-10">
+              <Download className="w-12 h-12 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Downloaded Albums</h3>
+              <p>You haven&apos;t downloaded any albums yet.</p>
+              <p>Disable the filter above to see all albums.</p>
+            </div>
+          ) : (
+            <div>
+              <AlbumList 
+                albums={filteredAlbums}
+                onAlbumSelect={handleAlbumSelect}
+                showSetupPrompt={!hasCredentials}
+                onSetup={() => navigate("/setup")}
+              />
+            </div>
+          )
+        ) : selectedAlbum ? (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center mb-4 gap-3 p-2 rounded-lg bg-gradient-to-r from-emerald-600/5 to-teal-700/5 border border-emerald-600/10">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleGoBackToAlbums} 
+                className="hover:bg-muted flex-shrink-0"
+                aria-label="Back to albums"
               >
-                <Download className="w-12 h-12 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Downloaded Albums</h3>
-                <p>You haven&apos;t downloaded any albums yet.</p>
-                <p>Disable the filter above to see all albums.</p>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="album-list"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <AlbumList 
-                  albums={filteredAlbums} 
-                  onAlbumSelect={handleAlbumSelect}
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <div className="flex items-center gap-3 overflow-hidden">
+                <StoredImage 
+                  fileUUID={selectedAlbumArtUUID}
+                  alt={`${selectedAlbum.name} cover`}
+                  className="w-16 h-16 object-cover rounded-md flex-shrink-0"
+                  placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
                 />
-              </motion.div>
-            )
-          ) : selectedAlbum ? (
-            <motion.div
-              key={selectedAlbum.name}
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-col h-full"
-            >
-              <div className="flex items-center mb-4 gap-3 p-2 rounded-lg bg-gradient-to-r from-emerald-600/5 to-teal-700/5 border border-emerald-600/10">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={handleGoBackToAlbums} 
-                  className="hover:bg-muted flex-shrink-0"
-                  aria-label="Back to albums"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <StoredImage 
-                    fileUUID={selectedAlbumArtUUID}
-                    alt={`${selectedAlbum.name} cover`}
-                    className="w-16 h-16 object-cover rounded-md flex-shrink-0"
-                    placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
-                  />
-                  <div className="flex-grow overflow-hidden">
-                    <h2 className="text-xl font-semibold truncate" title={selectedAlbum.name}>
-                      {selectedAlbum.name}
-                    </h2>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {findArtistName(selectedAlbum.tracks) || "Unknown Artist"}
-                    </p>
-                  </div>
+                <div className="flex-grow overflow-hidden">
+                  <h2 className="text-xl font-semibold truncate" title={selectedAlbum.name}>
+                    {selectedAlbum.name}
+                  </h2>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {findArtistName(selectedAlbum.tracks) || "Unknown Artist"}
+                  </p>
                 </div>
               </div>
-              
-              <div className="flex-grow overflow-y-auto">
+            </div>
+            
+            <div className="flex-grow overflow-y-auto">
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                    Loading tracks...
+                  </div>
+                }
+              >
                 <TrackList
                   tracks={selectedAlbumTracks}
                   currentTrack={currentTrack}
@@ -344,26 +337,26 @@ export function Home() {
                   downloadingTrackKeys={downloadingTrackKeys}
                   onDeleteTrack={deleteTrack}
                 />
-              </div>
-            </motion.div>
-          ) : (
-             <motion.div key="loading-album" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-               <div className="flex flex-col items-center justify-center h-full">
-                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-                 <p>Loading album...</p> 
-               </div>
-             </motion.div>
-           )
-          }
-        </AnimatePresence>
+              </Suspense>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+            <p>Loading album...</p> 
+          </div>
+         )
+        }
       </main>
 
       {currentTrack !== null && (
-        <AudioPlayer
-          track={currentTrack}
-          onNext={handleNext}
-          onPrevious={handlePrevious}
-        />
+        <Suspense fallback={null}>
+          <AudioPlayer
+            track={currentTrack}
+            onNext={handleNext}
+            onPrevious={handlePrevious}
+          />
+        </Suspense>
       )}
     </div>
   );

@@ -5,8 +5,7 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { InfoIcon, Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -129,15 +128,6 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
 
   return (
     <Card className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">AWS S3 Configuration</h2>
-      
-      <Alert className="mb-6">
-        <InfoIcon className="h-4 w-4" />
-        <AlertDescription>
-          Your audio files must be stored in an S3 bucket. Follow these steps to set up secure access.
-        </AlertDescription>
-      </Alert>
-
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
           <FormField
