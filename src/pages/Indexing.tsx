@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
 import { Track, TrackService } from "@/lib/services/TrackService";
-import { _Object, S3Client } from "@aws-sdk/client-s3";
+import { _Object } from "@aws-sdk/client-s3";
 import { Header } from "@/components/Header";
 
 
@@ -20,8 +20,6 @@ export function Indexing() {
 
   const createTrackFromS3Object = async (
     obj: _Object,
-    bucket: string,
-    client: S3Client,
   ): Promise<Track> => {
     const key = obj.Key!;
     const pathParts = key.split("/");
@@ -39,9 +37,11 @@ export function Indexing() {
   };
 
   useEffect(() => {
-    let indexing = true;
+    let cancelled = false;
     const listingInterval = setInterval(() => {
-      setProgress(prev => (prev < 49 ? prev + 2 : prev));
+      if (!cancelled) {
+        setProgress(prev => (prev < 49 ? prev + 2 : prev));
+      }
     }, 250);
 
     const startIndexing = async () => {
@@ -49,22 +49,23 @@ export function Indexing() {
       const storedCredentials = S3Service.getInstance().getCredentials();
       if (!storedCredentials) {
         navigate("/setup");
+        return;
       }
 
-      setIsIndexing(indexing);
+      setIsIndexing(true);
       try {
         const s3Service = S3Service.getInstance();
         const trackService = TrackService.getInstance();
 
-        const { s3Client, bucket } = await s3Service.getClientAndBucket();
         const tracks = [];
 
         // Call listObjects continually until nextContinuationToken is null
         let isTruncated = true;
         let nextContinuationToken = undefined;
-        let maxKeys = 100;
+        const maxKeys = 100;
 
         while (isTruncated) {
+          if (cancelled) return;
           const { objects, nextContinuationToken: nextToken, isTruncated: truncated } = await s3Service.listObjects({
             continuationToken: nextContinuationToken,
             limit: maxKeys,
@@ -72,7 +73,7 @@ export function Indexing() {
 
           for (const obj of objects) {
             if(trackService.isAudioFile(obj.Key!)) {
-              const track = await createTrackFromS3Object(obj, bucket, s3Client);
+              const track = await createTrackFromS3Object(obj);
               tracks.push(track);
             }
           }
@@ -86,10 +87,8 @@ export function Indexing() {
 
         // End of S3 listing phase: clear interval and set progress to 50%
         clearInterval(listingInterval);
+        if (cancelled) return;
         setProgress(50);
-
-        // This feels like a hack, rather than the correct solution
-        if(!indexing) return;
 
         // Save tracks to cache
         trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])));
@@ -98,13 +97,18 @@ export function Indexing() {
         const concurrencyLimit = 5;
         let i = 0;
         while (i < tracks.length) {
+          if (cancelled) return;
           const chunk = tracks.slice(i, i + concurrencyLimit);
           await Promise.all(chunk.map(track => trackService.populateTrackMetadata(track)));
           i += chunk.length;
-          setProgress(50 + Math.round((i / tracks.length) * 50));
+          if (!cancelled) {
+            setProgress(50 + Math.round((i / tracks.length) * 50));
+          }
           await new Promise((resolve) => setTimeout(resolve, 5));  // slight delay for UI update
         }
-        setProgress(100);
+        if (!cancelled) {
+          setProgress(100);
+        }
 
         // Final progress update
         toast({
@@ -113,23 +117,29 @@ export function Indexing() {
         });
 
         // Small delay before navigation for better UX
-        setTimeout(() => navigate("/"), 1000);
+        if (!cancelled) {
+          setTimeout(() => navigate("/"), 1000);
+        }
       } catch (err) {
-        setError(err as Error);
-        toast({
-          title: "Indexing Error",
-          description: (err as Error).message,
-          variant: "destructive",
-        });
+        if (!cancelled) {
+          setError(err as Error);
+          toast({
+            title: "Indexing Error",
+            description: (err as Error).message,
+            variant: "destructive",
+          });
+        }
       } finally {
-        setIsIndexing(false);
+        if (!cancelled) {
+          setIsIndexing(false);
+        }
       }
     };
 
-    const indexingPromise = startIndexing();
+    startIndexing();
 
     return () => {
-      indexing = false;
+      cancelled = true;
       clearInterval(listingInterval);
     };
   }, [navigate, toast]);

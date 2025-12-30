@@ -1,6 +1,6 @@
 import * as mm from 'music-metadata';
 import { S3Service } from './S3Service';
-// @ts-ignore - no types for this package
+// @ts-expect-error - no types for this package
 import albumArt from 'album-art';
 import { FileStorageService } from './FileStorageService';
 

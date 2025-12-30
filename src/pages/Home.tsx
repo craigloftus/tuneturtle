@@ -38,11 +38,8 @@ export function Home() {
 
   const [albums, setAlbums] = useState<Album[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
-  const [isDownloadingAlbum, setIsDownloadingAlbum] = useState(false);
-  const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
-  const [isHoveringAlbumAction, setIsHoveringAlbumAction] = useState(false);
 
   const selectedAlbum = useMemo(() => 
     albums.find(album => album.name === selectedAlbumId) || null,
@@ -58,10 +55,6 @@ export function Home() {
     selectedAlbum ? findAlbumArtUUID(selectedAlbum.tracks) : null,
     [selectedAlbum]
   );
-
-  const currentIndex = currentTrack
-    ? selectedAlbumTracks.findIndex((t) => t.key === currentTrack.key)
-    : -1;
 
   const filteredAlbums = useMemo(() => {
     if (!showLocalOnly) return albums;
@@ -92,7 +85,7 @@ export function Home() {
     };
 
     loadTracks();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     const albums = tracks.reduce((acc, track) => {
@@ -184,7 +177,7 @@ export function Home() {
   }, [currentTrack, playlistTracks, setCurrentTrack]);
 
   const handleDownload = useCallback(async (track: Track) => {
-    let trackUUID = self.crypto.randomUUID();
+    const trackUUID = self.crypto.randomUUID();
 
     const url = await s3Service.getSignedUrl(track.key);
     const resp = await fetch(url);
@@ -217,30 +210,6 @@ export function Home() {
     }
   }, [handleDownload, setTracks]);
   
-  const downloadAlbum = useCallback(async (tracksToDownload: Track[]) => {
-    setIsDownloadingAlbum(true);
-    try {
-      const trackKeys = tracksToDownload.map(track => track.key);
-      setDownloadingTrackKeys(prev => [...prev, ...trackKeys]);
-      
-      for (const track of tracksToDownload) {
-        if (!track.localPath) {
-          await handleDownload(track);
-        }
-      }
-  
-      const cachedTracks = trackService.getTracks();
-      if (cachedTracks) {
-        setTracks(Object.values(cachedTracks));
-      }
-    } catch (error) {
-      console.error('Album download failed:', error);
-    } finally {
-      setDownloadingTrackKeys(prev => prev.filter(key => !tracksToDownload.some(track => track.key === key)));
-      setIsDownloadingAlbum(false);
-    }
-  }, [handleDownload, setTracks]);
-
   const performDelete = useCallback(async (track: Track) => {
     if (!track.localPath) return;
 
@@ -279,47 +248,6 @@ export function Home() {
     }
   }, [performDelete, setTracks, toast]);
 
-  const deleteAlbum = useCallback(async (tracksToDelete: Track[]) => {
-    setIsDeletingAlbum(true);
-    let deletedCount = 0;
-    try {
-      for (const track of tracksToDelete) {
-        if (track.localPath) {
-          await performDelete(track);
-          deletedCount++;
-        }
-      }
-
-      const cachedTracks = trackService.getTracks();
-      if (cachedTracks) {
-        setTracks(Object.values(cachedTracks));
-      }
-
-      if (deletedCount > 0) {
-        toast({
-          title: "Album Files Deleted",
-          description: `${deletedCount} track(s) removed from local storage for ${selectedAlbum?.name}.`,
-        });
-      } else {
-         toast({
-          title: "No Files Deleted",
-          description: `No local files found to delete for ${selectedAlbum?.name}.`,
-          variant: "default"
-        });
-      }
-
-    } catch (error) {
-      console.error('Album deletion failed:', error);
-       toast({
-          title: "Album Deletion Error",
-          description: `An error occurred while deleting album files. Some files may remain.`,
-          variant: "destructive",
-        });
-    } finally {
-      setIsDeletingAlbum(false);
-    }
-  }, [performDelete, selectedAlbum, setTracks, toast]);
-
   // Helper to calculate usage percentage
   const usagePercent = storageEstimate && storageEstimate.quota > 0 
       ? ((storageEstimate.usage / storageEstimate.quota) * 100).toFixed(1)
@@ -352,7 +280,7 @@ export function Home() {
               >
                 <Download className="w-12 h-12 mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Downloaded Albums</h3>
-                <p>You haven't downloaded any albums yet.</p>
+                <p>You haven&apos;t downloaded any albums yet.</p>
                 <p>Disable the filter above to see all albums.</p>
               </motion.div>
             ) : (

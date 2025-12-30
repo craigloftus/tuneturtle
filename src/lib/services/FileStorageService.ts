@@ -13,7 +13,7 @@ export class FileStorageService {
   private sanitizeFilename(input: string): string {
     // Replace invalid filename characters with underscores
     // Keep it relatively simple, might need more robust sanitization depending on environment
-    return input.replace(/[\/\\?%*:|\"<> ]/g, '_').toLowerCase();
+    return input.replace(/[/\\?%*:|"<> ]/g, '_').toLowerCase();
   }
 
   public generateAlbumArtId(artist: string, album: string): string {

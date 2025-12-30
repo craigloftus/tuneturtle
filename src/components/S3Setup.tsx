@@ -234,7 +234,7 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
               </p>
               <ol className="list-decimal pl-4 space-y-2">
                 <li>Go to the AWS IAM Console and create a new IAM user</li>
-                <li>Choose "Programmatic access" to generate access keys</li>
+                <li>Choose &quot;Programmatic access&quot; to generate access keys</li>
                 <li>Create a new policy with the following read-only permissions:
                   <pre className="mt-2 p-2 bg-muted rounded-md text-xs overflow-x-auto">
 {`{

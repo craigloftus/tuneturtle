@@ -1,7 +1,7 @@
 import { Track, Album } from "@/lib/services/TrackService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Check, Download, PlayCircle, Loader2, Trash2, Music2 } from "lucide-react";
+import { Check, Download, Loader2, Trash2, Music2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { formatTrackName } from "@/utils/formatters";
 
@@ -12,7 +12,6 @@ interface TrackListProps {
   selectedAlbum: Album | null;
   onDownloadTrack: (track: Track) => Promise<void>;
   onDeleteTrack: (track: Track) => Promise<void>;
-  showLocalOnly?: boolean;
   downloadingTrackKeys?: string[];
 }
 
@@ -23,7 +22,6 @@ export function TrackList({
   selectedAlbum, 
   onDownloadTrack, 
   onDeleteTrack,
-  showLocalOnly = false,
   downloadingTrackKeys = []
 }: TrackListProps) {
   const [hoveredTrackKey, setHoveredTrackKey] = useState<string | null>(null);
@@ -43,17 +41,6 @@ export function TrackList({
       console.error('Delete failed for track:', track, error);
     }
   };
-
-  // Debug log input tracks
-  console.debug('[TrackList] Initial data:', {
-    totalTracks: tracks.length,
-    selectedAlbumName: selectedAlbum?.name,
-    sampleTracks: tracks.slice(0, 3).map(t => ({
-      key: t.key,
-      album: t.album,
-      fileName: t.fileName
-    }))
-  });
 
   // Filter tracks by selected album if needed
   const filteredTracks = useMemo(() => {

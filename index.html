@@ -91,58 +91,23 @@
       <div class="splash-content">
         <img src="/static/base_turtle.png" alt="Tune Turtle Logo" class="splash-logo">
         <h1 class="splash-title"><span>Tune</span><span>Turtle</span></h1>
-        <button class="setup-button">Setup Your Music Library</button>
       </div>
     </div>
     <div id="root"></div>
     <script>
-      // Check for existing credentials
-      const checkCredentials = () => {
-        try {
-          return !!localStorage.getItem("aws_credentials");
-        } catch {
-          return false;
-        }
-      };
-
-      // Handle the splash screen visibility
-      const handleSplashScreen = () => {
+      (function () {
         const splashScreen = document.getElementById("splash-screen");
-        const setupButton = document.querySelector(".setup-button");
-        const hasCredentials = checkCredentials();
-        const currentPath = window.location.pathname;
+        if (!splashScreen) return;
 
-        // Hide splash screen immediately for non-root routes
-        if (currentPath !== "/") {
-          splashScreen.style.display = "none";
-          return;
-        }
-
-        if (!hasCredentials) {
-          setupButton.style.display = "inline-block";
-          setupButton.addEventListener("click", () => {
-            if (window.location.pathname !== "/setup") {
-              window.history.pushState({}, "", "/setup");
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }
+        const hideSplash = () => {
+          splashScreen.classList.add("fade-out");
+          setTimeout(() => {
             splashScreen.style.display = "none";
-          });
-        } else {
-          // If we have credentials, wait for React to load then fade out
-          const checkReactLoaded = setInterval(() => {
-            if (document.querySelector("#root").children.length > 0) {
-              clearInterval(checkReactLoaded);
-              splashScreen.classList.add("fade-out");
-              setTimeout(() => {
-                splashScreen.style.display = "none";
-              }, 300);
-            }
-          }, 100);
-        }
-      };
+          }, 300);
+        };
 
-      // Initialize splash screen behavior
-      handleSplashScreen();
+        window.addEventListener("app-ready", hideSplash, { once: true });
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

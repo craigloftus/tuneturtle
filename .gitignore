@@ -1,6 +1,6 @@
 node_modules
 dist
 .DS_Store
-server/public
+dev-dist
 vite.config.ts.*
 *.tar.gz

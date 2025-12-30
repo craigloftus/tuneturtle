@@ -1,7 +1,7 @@
 export class FetchError extends Error {
-  info: any;
+  info: unknown;
   status: number;
-  constructor(message: string, info: any, status: number) {
+  constructor(message: string, info: unknown, status: number) {
     super(message);
     this.info = info;
     this.status = status;
@@ -26,10 +26,10 @@ export const fetcher = async (url: string) => {
     console.debug(`[Fetch Response] ${url} - Status: ${res.status} - Time: ${Math.round(endTime - startTime)}ms`);
 
     if (!res.ok) {
-      let errorInfo;
+      let errorInfo: unknown;
       try {
         errorInfo = await res.json();
-      } catch (e) {
+      } catch {
         errorInfo = { message: 'Failed to parse error response' };
       }
 
