@@ -121,7 +121,11 @@
         if (!hasCredentials) {
           setupButton.style.display = "inline-block";
           setupButton.addEventListener("click", () => {
-            window.location.href = "/setup";
+            if (window.location.pathname !== "/setup") {
+              window.history.pushState({}, "", "/setup");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }
+            splashScreen.style.display = "none";
           });
         } else {
           // If we have credentials, wait for React to load then fade out
