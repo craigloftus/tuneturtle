@@ -27,7 +27,6 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import { S3Credentials } from "@/lib/services/S3Service";
 
@@ -85,6 +84,8 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
 
   // State to control Popover open/close
   const [isRegionPopoverOpen, setIsRegionPopoverOpen] = useState(false);
+  const [regionSearch, setRegionSearch] = useState("");
+  const selectedRegion = form.watch("region");
 
   // Load credentials from local storage on mount
   useEffect(() => {
@@ -107,7 +108,11 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
     }
   }, [form]); // Dependency array includes form to access 'reset'
 
-  const bucketName = form.watch("bucket");
+  useEffect(() => {
+    if (isRegionPopoverOpen) {
+      setRegionSearch(selectedRegion ?? "");
+    }
+  }, [isRegionPopoverOpen, selectedRegion]);
 
   // We need a new submit handler to save to local storage on success
   const handleFormSubmit = async (data: S3Credentials) => {
@@ -128,173 +133,146 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
 
   return (
     <Card className="p-6 max-w-2xl mx-auto">
+      <h3 className="text-lg font-semibold mb-4">S3 Configuration</h3>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
-          <FormField
-            control={form.control}
-            name="region"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Region</FormLabel>
+          <div className="grid gap-6 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="region"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Region</FormLabel>
                 <Popover open={isRegionPopoverOpen} onOpenChange={setIsRegionPopoverOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className={cn(
-                          "w-full justify-between",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value
-                          ? awsRegions.find(
-                              (region) => region.value === field.value
-                            )?.label ?? field.value
-                          : "Select or type region..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value
+                            ? awsRegions.find(
+                                (region) => region.value === field.value
+                              )?.label ?? field.value
+                            : "Select or type region..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                    <Command shouldFilter={true}>
+                    <Command
+                      shouldFilter={true}
+                      filter={(value, search, keywords) => {
+                        if (!search) return 1;
+                        const haystack = [value, ...(keywords ?? [])]
+                          .join(" ")
+                          .toLowerCase();
+                        return haystack.includes(search.toLowerCase()) ? 1 : 0;
+                      }}
+                    >
                       <CommandInput 
                         placeholder="Search region or type custom..." 
-                        onValueChange={(search) => field.onChange(search)}
-                        value={field.value}
+                        onValueChange={setRegionSearch}
+                        value={regionSearch}
                       />
                       <CommandList>
                         <CommandEmpty>No region found.</CommandEmpty>
                         <CommandGroup>
+                          {regionSearch.trim().length > 0 &&
+                            !awsRegions.some((region) => {
+                              const search = regionSearch.trim().toLowerCase();
+                              return (
+                                region.value.toLowerCase() === search ||
+                                region.label.toLowerCase() === search
+                              );
+                            }) && (
+                              <CommandItem
+                                value={regionSearch.trim()}
+                                onSelect={(currentValue) => {
+                                  form.setValue("region", currentValue);
+                                  setIsRegionPopoverOpen(false);
+                                }}
+                              >
+                                Use &quot;{regionSearch.trim()}&quot;
+                              </CommandItem>
+                            )}
                           {awsRegions.map((region) => (
                             <CommandItem
                               value={region.value}
                               key={region.value}
+                              keywords={[region.label, region.value]}
                               onSelect={(currentValue) => {
                                 form.setValue("region", currentValue === field.value ? "" : currentValue);
                                 setIsRegionPopoverOpen(false); // Close popover on select
                               }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  field.value === region.value
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                )}
-                              />
-                              {region.label} ({region.value})
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <FormDescription>
-                  Select the AWS region or type a custom one (e.g., us-east-1).
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="bucket"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Bucket Name</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormDescription>
-                  The name of your S3 bucket containing the audio files
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === region.value
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                {region.label} ({region.value})
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="bucket"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bucket Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <div className="prose dark:prose-invert space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">IAM Setup Instructions</h3>
-              <p className="text-sm text-muted-foreground">
-                Create an IAM user with read-only access to your S3 bucket.
-              </p>
-              <ol className="list-decimal pl-4 space-y-2">
-                <li>Go to the AWS IAM Console and create a new IAM user</li>
-                <li>Choose &quot;Programmatic access&quot; to generate access keys</li>
-                <li>Create a new policy with the following read-only permissions:
-                  <pre className="mt-2 p-2 bg-muted rounded-md text-xs overflow-x-auto">
-{`{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::${bucketName || 'YOUR-BUCKET-NAME'}",
-        "arn:aws:s3:::${bucketName || 'YOUR-BUCKET-NAME'}/*"
-      ]
-    }
-  ]
-}`}
-                  </pre>
-                </li>
-                <li>Attach the policy to your IAM user</li>
-                <li>Configure CORS for your S3 bucket:
-                  <pre className="mt-2 p-2 bg-muted rounded-md text-xs overflow-x-auto">
-{`[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["GET"],
-    "AllowedOrigins": ["*"],
-    "ExposeHeaders": ["ETag"]
-  }
-]`}
-                  </pre>
-                </li>
-              </ol>
-            </div>
+            <FormField
+              control={form.control}
+              name="accessKeyId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Access Key ID</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="secretAccessKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Secret Access Key</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
-          
-          <FormField
-            control={form.control}
-            name="accessKeyId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Access Key ID</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormDescription>
-                  The access key ID from your IAM user credentials
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="secretAccessKey"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Secret Access Key</FormLabel>
-                <FormControl>
-                  <Input type="password" {...field} />
-                </FormControl>
-                <FormDescription>
-                  The secret access key from your IAM user credentials
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Validating..." : "Connect to S3"}
