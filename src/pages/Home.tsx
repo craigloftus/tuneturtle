@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
 import { AlbumList } from "@/components/AlbumList";
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Loader2, Music2, Info } from "lucide-react";
+import { ArrowLeft, Check, Download, Loader2, Music2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Track, Album, TrackService, findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
@@ -38,6 +38,7 @@ export function Home() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [error] = useState<string | null>(null);
   const [downloadingTrackKeys, setDownloadingTrackKeys] = useState<string[]>([]);
+  const [isAlbumDownloading, setIsAlbumDownloading] = useState(false);
 
   const selectedAlbum = useMemo(() => 
     albums.find(album => album.name === selectedAlbumId) || null,
@@ -213,6 +214,24 @@ export function Home() {
       setDownloadingTrackKeys((prev) => prev.filter(key => key !== track.key));
     }
   }, [handleDownload, setTracks]);
+
+  const downloadableAlbumTracks = useMemo(() => {
+    return selectedAlbumTracks.filter((track) => !track.localPath);
+  }, [selectedAlbumTracks]);
+  const isAlbumDownloaded = selectedAlbumTracks.length > 0 && downloadableAlbumTracks.length === 0;
+
+  const downloadAlbum = useCallback(async () => {
+    if (isAlbumDownloading || downloadableAlbumTracks.length === 0) return;
+    setIsAlbumDownloading(true);
+    toast({
+      title: "Downloading Album",
+      description: `${downloadableAlbumTracks.length} track${downloadableAlbumTracks.length === 1 ? "" : "s"} queued.`,
+    });
+    for (const track of downloadableAlbumTracks) {
+      await downloadTrack(track);
+    }
+    setIsAlbumDownloading(false);
+  }, [downloadTrack, downloadableAlbumTracks, isAlbumDownloading, toast]);
   
   const performDelete = useCallback(async (track: Track) => {
     if (!track.localPath) return;
@@ -292,32 +311,51 @@ export function Home() {
           )
         ) : selectedAlbum ? (
           <div className="flex flex-col h-full">
-            <div className="flex items-center mb-4 gap-3 p-2 rounded-lg bg-gradient-to-r from-emerald-600/5 to-teal-700/5 border border-emerald-600/10">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={handleGoBackToAlbums} 
-                className="hover:bg-muted flex-shrink-0"
-                aria-label="Back to albums"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex items-center gap-3 overflow-hidden">
-                <StoredImage 
-                  fileUUID={selectedAlbumArtUUID}
-                  alt={`${selectedAlbum.name} cover`}
-                  className="w-16 h-16 object-cover rounded-md flex-shrink-0"
-                  placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
-                />
-                <div className="flex-grow overflow-hidden">
-                  <h2 className="text-xl font-semibold truncate" title={selectedAlbum.name}>
-                    {selectedAlbum.name}
-                  </h2>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {findArtistName(selectedAlbum.tracks) || "Unknown Artist"}
-                  </p>
+            <div className="flex items-center justify-between mb-4 gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-600/5 to-teal-700/5 border border-emerald-600/10">
+              <div className="flex items-center gap-3 min-w-0">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleGoBackToAlbums} 
+                  className="hover:bg-muted flex-shrink-0"
+                  aria-label="Back to albums"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <StoredImage 
+                    fileUUID={selectedAlbumArtUUID}
+                    alt={`${selectedAlbum.name} cover`}
+                    className="w-16 h-16 object-cover rounded-md flex-shrink-0"
+                    placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
+                  />
+                  <div className="flex-grow overflow-hidden">
+                    <h2 className="text-xl font-semibold truncate" title={selectedAlbum.name}>
+                      {selectedAlbum.name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {findArtistName(selectedAlbum.tracks) || "Unknown Artist"}
+                    </p>
+                  </div>
                 </div>
               </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={downloadAlbum}
+                disabled={isAlbumDownloading || downloadableAlbumTracks.length === 0}
+                title={isAlbumDownloaded ? "Album downloaded" : "Download album"}
+                aria-label={isAlbumDownloaded ? "Album downloaded" : "Download album"}
+                className="flex-shrink-0"
+              >
+                {isAlbumDownloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isAlbumDownloaded ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </Button>
             </div>
             
             <div className="flex-grow overflow-y-auto">
