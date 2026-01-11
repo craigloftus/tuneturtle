@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { S3Setup } from "@/components/S3Setup";
 import { validateS3Credentials } from "@/lib/aws";
 import { useToast } from "@/hooks/use-toast";
-import { Header } from "@/components/Header";
 import type { S3Credentials } from "@/lib/services/S3Service";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,13 +34,8 @@ export function Setup() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header 
-        showRefreshButton={false}
-        showSettingsButton={false}
-      />
-      <div className="container mx-auto p-6 mt-3">
-        <div className="max-w-2xl mx-auto space-y-6">
+    <div className="container mx-auto p-6 mt-3">
+      <div className="max-w-2xl mx-auto space-y-6">
           
           <div className="flex items-center mb-4">
             <Button
@@ -116,7 +110,6 @@ export function Setup() {
           </Card>
 
           <S3Setup onSubmit={handleSubmit} isLoading={isLoading} />
-        </div>
       </div>
     </div>
   );

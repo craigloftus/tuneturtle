@@ -1,20 +1,17 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, InfoIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
 import { Track, TrackService } from "@/lib/services/TrackService";
 import { _Object } from "@aws-sdk/client-s3";
-import { Header } from "@/components/Header";
 
 
 export function Indexing() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [isIndexing, setIsIndexing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
 
@@ -52,7 +49,6 @@ export function Indexing() {
         return;
       }
 
-      setIsIndexing(true);
       try {
         const s3Service = S3Service.getInstance();
         const trackService = TrackService.getInstance();
@@ -129,10 +125,6 @@ export function Indexing() {
             variant: "destructive",
           });
         }
-      } finally {
-        if (!cancelled) {
-          setIsIndexing(false);
-        }
       }
     };
 
@@ -146,52 +138,35 @@ export function Indexing() {
 
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen">
-        <Header showRefreshButton={false} />
-        <div className="container mx-auto p-6 mt-20">
-          <h2 className="text-2xl font-bold mb-4">Indexing Error</h2>
-          <Alert variant="destructive">
-            <AlertDescription>
-              Failed to index music library: {error.message}
-            </AlertDescription>
-          </Alert>
-          <Button onClick={() => navigate("/setup")} className="mt-4">
-            Back to Setup
-          </Button>
-        </div>
+      <div className="container mx-auto p-6 mt-20">
+        <h2 className="text-2xl font-bold mb-4">Indexing Error</h2>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to index music library: {error.message}
+          </AlertDescription>
+        </Alert>
+        <Button onClick={() => navigate("/setup")} className="mt-4">
+          Back to Setup
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header showRefreshButton={false} />
-      <div className="container mx-auto p-6 mt-3">
-        <Card className="p-6 max-w-2xl mx-auto">
-          <div className="space-y-6">
-            <div className="flex items-center space-x-2">
-              <InfoIcon className="h-5 w-5 text-blue-500" />
-              <h3 className="text-xl font-semibold">Indexing in Progress</h3>
-            </div>
-            <div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
-              </div>
-              <p className="text-sm text-center mt-1">{progress}%</p>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-center">
-                {isIndexing && <Loader2 className="h-8 w-8 animate-spin" />}
-              </div>
-              <div className="text-center">
-                <p className="text-muted-foreground">
-                  Please wait while we index your music library...
-                </p>
-              </div>
-            </div>
+    <div className="container mx-auto p-6 mt-3">
+      <Card className="p-6 max-w-2xl mx-auto">
+        <div className="space-y-6">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-xl font-semibold">Indexing in Progress</h3>
           </div>
-        </Card>
-      </div>
+          <div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+            </div>
+            <p className="text-sm text-center mt-1">{progress}%</p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

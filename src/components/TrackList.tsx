@@ -1,9 +1,11 @@
 import { Track, Album } from "@/lib/services/TrackService";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Check, Download, Loader2, Trash2, Music2 } from "lucide-react";
 import { useState, useMemo } from "react";
+import type { ReactNode } from "react";
 import { formatTrackName } from "@/utils/formatters";
+import { cn } from "@/lib/utils";
+import { StoredImage } from "@/components/StoredImage";
 
 interface TrackListProps {
   tracks: Track[];
@@ -13,6 +15,8 @@ interface TrackListProps {
   onDownloadTrack: (track: Track) => Promise<void>;
   onDeleteTrack: (track: Track) => Promise<void>;
   downloadingTrackKeys?: string[];
+  extraActions?: (track: Track) => ReactNode;
+  className?: string;
 }
 
 export function TrackList({ 
@@ -22,7 +26,9 @@ export function TrackList({
   selectedAlbum, 
   onDownloadTrack, 
   onDeleteTrack,
-  downloadingTrackKeys = []
+  downloadingTrackKeys = [],
+  extraActions,
+  className,
 }: TrackListProps) {
   const [hoveredTrackKey, setHoveredTrackKey] = useState<string | null>(null);
 
@@ -68,69 +74,63 @@ export function TrackList({
   }, [filteredTracks, selectedAlbum]);
 
   return (
-    <ScrollArea className="h-[calc(100vh-16rem)] w-full rounded-md">
-      <div className="p-4 space-y-6">
-        {Object.entries(tracksByAlbum).map(([albumName, { tracks: groupTracks, artPath }]) => (
-          <div key={albumName} className="space-y-3"> {/* Increased spacing */} 
-            {/* Album Header: Art and Name (only if not a single selected album view) */}
-            {!selectedAlbum && (
-              <div className="flex items-center space-x-3 mb-3"> {/* Added margin-bottom */} 
-                <div className="flex-shrink-0 w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
-                  {artPath ? (
-                    <img src={artPath} alt={`${albumName} album art`} className="w-full h-full object-cover" />
+    <div className={cn("p-4 space-y-6", className)}>
+      {Object.entries(tracksByAlbum).map(([albumName, { tracks: groupTracks, artPath }]) => (
+        <div key={albumName} className="space-y-3">
+          {!selectedAlbum && (
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="flex-shrink-0 w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
+                <StoredImage
+                  fileUUID={artPath}
+                  alt={`${albumName} album art`}
+                  className="w-full h-full object-cover"
+                  placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
+                />
+              </div>
+              <h3 className="text-lg font-semibold truncate">{albumName}</h3>
+            </div>
+          )}
+          <div className="space-y-2">
+            {groupTracks.map((track) => (
+              <div className="flex justify-between items-center" key={track.key}>
+                <Button
+                  variant={currentTrack?.key === track.key ? "secondary" : "ghost"}
+                  className="flex-grow justify-start text-left mr-2 min-w-0"
+                  onClick={() => onSelect(track)}
+                  title={formatTrackName(track)}
+                >
+                  <span className="truncate">{formatTrackName(track)}</span>
+                </Button>
+
+                <div className="flex-shrink-0 flex items-center space-x-1">
+                  {extraActions?.(track)}
+                  {track.localPath ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleDelete(track)}
+                      onMouseEnter={() => setHoveredTrackKey(track.key)}
+                      onMouseLeave={() => setHoveredTrackKey(null)}
+                      className="hover:bg-destructive/10 hover:text-destructive"
+                      title="Delete local file"
+                    >
+                      {hoveredTrackKey === track.key ? <Trash2 className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                    </Button>
+                  ) : downloadingTrackKeys.includes(track.key) ? (
+                    <Button variant="outline" size="icon" disabled title="Downloading...">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </Button>
                   ) : (
-                    <Music2 className="w-6 h-6 text-muted-foreground" />
+                    <Button variant="outline" size="icon" onClick={() => handleDownload(track)} title="Download track">
+                      <Download className="h-4 w-4" />
+                    </Button>
                   )}
                 </div>
-                <h3 className="text-lg font-semibold truncate">{albumName}</h3>
               </div>
-            )}
-            
-            {/* Track items */} 
-            <div className="space-y-2"> {/* Container for tracks */} 
-              {groupTracks.map((track) => (
-                <div className="flex justify-between items-center" key={track.key}>
-                  {/* Track Button (full width again) */}
-                  <Button
-                    variant={currentTrack?.key === track.key ? "secondary" : "ghost"}
-                    className="flex-grow justify-start text-left mr-2 min-w-0" // Added min-w-0
-                    onClick={() => onSelect(track)}
-                    title={formatTrackName(track)}
-                  >
-                    {/* <PlayCircle className="mr-2 h-4 w-4" /> // Keep icon removed for cleaner look? */}
-                    <span className="truncate">{formatTrackName(track)}</span>
-                  </Button>
-                  
-                  {/* Action Buttons (kept compact) */}
-                  <div className="flex-shrink-0 flex items-center space-x-1">
-                    {track.localPath ? (
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => handleDelete(track)}
-                        onMouseEnter={() => setHoveredTrackKey(track.key)}
-                        onMouseLeave={() => setHoveredTrackKey(null)}
-                        className="hover:bg-destructive/10 hover:text-destructive"
-                        title="Delete local file"
-                      >
-                        {hoveredTrackKey === track.key ? <Trash2 className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                      </Button>
-                    ) : downloadingTrackKeys.includes(track.key) ? (
-                      <Button variant="outline" size="icon" disabled title="Downloading...">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="icon" onClick={() => handleDownload(track)} title="Download track">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </ScrollArea>
+        </div>
+      ))}
+    </div>
   );
 }
