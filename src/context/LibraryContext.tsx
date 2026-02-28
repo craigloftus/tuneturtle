@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { Album, TrackService } from "@/lib/services/TrackService";
+import { Album, getAlbumIdForTrackKey, TrackService } from "@/lib/services/TrackService";
 
 interface LibraryContextValue {
   tracks: ReturnType<TrackService["getSnapshot"]>;
@@ -25,11 +25,12 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const albums = useMemo(() => {
     return tracks.reduce((acc, track) => {
       const albumName = track.album || "Unknown Album";
-      const existing = acc.find((album) => album.name === albumName);
+      const albumId = track.albumId || getAlbumIdForTrackKey(track.key);
+      const existing = acc.find((album) => album.id === albumId);
       if (existing) {
         existing.tracks.push(track);
       } else {
-        acc.push({ name: albumName, tracks: [track], coverUrl: undefined });
+        acc.push({ id: albumId, name: albumName, tracks: [track], coverUrl: undefined });
       }
       return acc;
     }, [] as Album[]);

@@ -22,6 +22,7 @@ export interface Track {
   key: string;
   size: number;
   lastModified: Date;
+  albumId: string;
   album: string;
   fileName: string;
   metadata?: TrackMetadata;
@@ -31,11 +32,17 @@ export interface Track {
 }
 
 export interface Album {
+  id: string;
   name: string;
   tracks: Track[];
   coverUrl?: string;
   selected?: boolean;
 }
+
+export const getAlbumIdForTrackKey = (key: string): string => {
+  const pathParts = key.split("/").filter(Boolean);
+  return pathParts.length > 1 ? pathParts.slice(0, -1).join("/") : "__root__";
+};
 
 // Moved from AlbumList.tsx
 export const findAlbumArtUUID = (tracks: Track[]): string | null | undefined => {

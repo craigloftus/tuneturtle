@@ -45,7 +45,7 @@ export function AlbumList({
 
         return (
           <Card
-            key={album.name}
+            key={album.id}
             className="group relative overflow-hidden transition-all hover:bg-accent"
           >
             <Button

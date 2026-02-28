@@ -1,4 +1,4 @@
-import { Track, Album } from "@/lib/services/TrackService";
+import { getAlbumIdForTrackKey, Track, Album } from "@/lib/services/TrackService";
 import { Button } from "@/components/ui/button";
 import { Check, Download, Loader2, Trash2, Music2 } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -51,7 +51,7 @@ export function TrackList({
   // Filter tracks by selected album if needed
   const filteredTracks = useMemo(() => {
     const albumFiltered = selectedAlbum
-      ? tracks.filter(track => (track.album || '').trim().toLowerCase() === (selectedAlbum.name || '').trim().toLowerCase())
+      ? tracks.filter((track) => (track.albumId || getAlbumIdForTrackKey(track.key)) === selectedAlbum.id)
       : tracks;
     return albumFiltered;
   }, [tracks, selectedAlbum]);
@@ -60,34 +60,35 @@ export function TrackList({
   const tracksByAlbum = useMemo(() => {
     return filteredTracks.reduce((acc, track) => {
       // Use selectedAlbum name if present, otherwise track's album or 'Unknown'
+      const albumId = selectedAlbum ? selectedAlbum.id : (track.albumId || getAlbumIdForTrackKey(track.key));
       const albumName = selectedAlbum ? selectedAlbum.name : (track.album || 'Unknown');
-      if (!acc[albumName]) {
-        acc[albumName] = { tracks: [], artPath: null }; // Initialize group with artPath
+      if (!acc[albumId]) {
+        acc[albumId] = { name: albumName, tracks: [], artPath: null };
       }
-      acc[albumName].tracks.push(track);
+      acc[albumId].tracks.push(track);
       // Find the first available art path for the album
-      if (!acc[albumName].artPath && track.albumArtPath) {
-        acc[albumName].artPath = track.albumArtPath;
+      if (!acc[albumId].artPath && track.albumArtPath) {
+        acc[albumId].artPath = track.albumArtPath;
       }
       return acc;
-    }, {} as Record<string, { tracks: Track[]; artPath: string | null | undefined }>);
+    }, {} as Record<string, { name: string; tracks: Track[]; artPath: string | null | undefined }>);
   }, [filteredTracks, selectedAlbum]);
 
   return (
     <div className={cn("p-4 space-y-6", className)}>
-      {Object.entries(tracksByAlbum).map(([albumName, { tracks: groupTracks, artPath }]) => (
-        <div key={albumName} className="space-y-3">
+      {Object.entries(tracksByAlbum).map(([albumId, { name, tracks: groupTracks, artPath }]) => (
+        <div key={albumId} className="space-y-3">
           {!selectedAlbum && (
             <div className="flex items-center space-x-3 mb-3">
               <div className="flex-shrink-0 w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
                 <StoredImage
                   fileUUID={artPath}
-                  alt={`${albumName} album art`}
+                  alt={`${name} album art`}
                   className="w-full h-full object-cover"
                   placeholderIcon={<Music2 className="w-6 h-6 text-muted-foreground" />}
                 />
               </div>
-              <h3 className="text-lg font-semibold truncate">{albumName}</h3>
+              <h3 className="text-lg font-semibold truncate">{name}</h3>
             </div>
           )}
           <div className="space-y-2">
