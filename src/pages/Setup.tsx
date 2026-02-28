@@ -22,12 +22,14 @@ export function Setup() {
         description: "Successfully connected to S3",
       });
       navigate("/indexing");
+      return true;
     } catch (error) {
       toast({
         title: "Error",
         description: (error as Error).message,
         variant: "destructive",
       });
+      return false;
     } finally {
       setIsLoading(false);
     }
