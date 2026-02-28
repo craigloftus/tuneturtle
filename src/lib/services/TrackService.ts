@@ -35,8 +35,6 @@ export interface Album {
   id: string;
   name: string;
   tracks: Track[];
-  coverUrl?: string;
-  selected?: boolean;
 }
 
 export const getAlbumIdForTrackKey = (key: string): string => {

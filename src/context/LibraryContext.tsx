@@ -30,7 +30,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (existing) {
         existing.tracks.push(track);
       } else {
-        acc.push({ id: albumId, name: albumName, tracks: [track], coverUrl: undefined });
+        acc.push({ id: albumId, name: albumName, tracks: [track] });
       }
       return acc;
     }, [] as Album[]);
