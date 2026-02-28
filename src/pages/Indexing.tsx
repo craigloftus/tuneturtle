@@ -87,7 +87,7 @@ export function Indexing() {
         setProgress(50);
 
         // Save tracks to cache
-        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])));
+        trackService.mergeIndexedTracks(Object.fromEntries(tracks.map((t) => [t.key, t])));
 
         // Process tracks concurrently in batches to speed up metadata population without overloading the device
         const concurrencyLimit = 5;

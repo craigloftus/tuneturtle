@@ -1,9 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { Album, Track, TrackService } from "@/lib/services/TrackService";
+import { Album, TrackService } from "@/lib/services/TrackService";
 
 interface LibraryContextValue {
-  tracks: Track[];
+  tracks: ReturnType<TrackService["getSnapshot"]>;
   albums: Album[];
   refreshTracks: () => void;
 }
@@ -12,16 +12,15 @@ const LibraryContext = createContext<LibraryContextValue | null>(null);
 const trackService = TrackService.getInstance();
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
-  const [tracks, setTracks] = useState<Track[]>([]);
+  const tracks = useSyncExternalStore(
+    trackService.subscribe,
+    trackService.getSnapshot,
+    trackService.getSnapshot
+  );
 
   const refreshTracks = useCallback(() => {
-    const cachedTracks = trackService.getTracks();
-    setTracks(cachedTracks ? Object.values(cachedTracks) : []);
+    trackService.refresh();
   }, []);
-
-  useEffect(() => {
-    refreshTracks();
-  }, [refreshTracks]);
 
   const albums = useMemo(() => {
     return tracks.reduce((acc, track) => {
