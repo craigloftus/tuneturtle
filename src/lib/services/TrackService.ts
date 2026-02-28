@@ -80,6 +80,10 @@ export class TrackService {
   private s3Service = S3Service.getInstance();
   private fileStorageService = FileStorageService.getInstance();
   private listeners = new Set<() => void>();
+  private snapshotCache = {
+    rawValue: null as string | null,
+    tracks: [] as Track[],
+  };
   private constructor() {}
 
   public static getInstance(): TrackService {
@@ -158,8 +162,18 @@ export class TrackService {
   };
 
   public getSnapshot = (): Track[] => {
+    const rawValue = localStorage.getItem(TRACKS_STORAGE_KEY);
+    if (rawValue === this.snapshotCache.rawValue) {
+      return this.snapshotCache.tracks;
+    }
+
     const tracks = this.getTracks();
-    return tracks ? Object.values(tracks) : [];
+    this.snapshotCache = {
+      rawValue,
+      tracks: tracks ? Object.values(tracks) : [],
+    };
+
+    return this.snapshotCache.tracks;
   };
 
   public refresh(): void {
