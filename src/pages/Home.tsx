@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Download, Info } from "lucide-react";
 import { AlbumList } from "@/components/AlbumList";
 import { useLibrary } from "@/context/LibraryContext";
-import { formatBytes, slugify } from "@/lib/utils";
+import { formatBytes } from "@/lib/utils";
 
 interface StorageEstimate {
   usage: number;
@@ -66,7 +66,7 @@ export function Home({ showLocalOnly }: HomeProps) {
       ) : (
         <AlbumList
           albums={filteredAlbums}
-          onAlbumSelect={(album) => navigate(`/albums/${slugify(album.name)}`)}
+          onAlbumSelect={(album) => navigate(`/albums/${encodeURIComponent(album.id)}`)}
           showSetupPrompt={!hasCredentials}
           onSetup={() => navigate("/setup")}
         />

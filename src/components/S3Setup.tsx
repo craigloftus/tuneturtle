@@ -66,7 +66,7 @@ const awsRegions = [
 const s3CredentialsCacheKey = "s3Credentials";
 
 interface S3SetupProps {
-  onSubmit: (data: S3Credentials) => Promise<void>;
+  onSubmit: (data: S3Credentials) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -116,13 +116,9 @@ export function S3Setup({ onSubmit, isLoading }: S3SetupProps) {
 
   // We need a new submit handler to save to local storage on success
   const handleFormSubmit = async (data: S3Credentials) => {
-    // Call the original onSubmit passed via props
-    await onSubmit(data);
+    const success = await onSubmit(data);
 
-    // Check if form is still valid after submission attempt (e.g., no errors thrown by onSubmit)
-    // A simple proxy for success here is checking isLoading is false (might need refinement)
-    // A better approach would be for the onSubmit prop to return success status
-    if (!isLoading) { // This check assumes onSubmit sets isLoading and resets it
+    if (success) {
       try {
         localStorage.setItem(s3CredentialsCacheKey, JSON.stringify(data));
       } catch (error) {

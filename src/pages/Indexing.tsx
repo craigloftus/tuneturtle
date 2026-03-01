@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { S3Service } from "@/lib/services/S3Service";
-import { Track, TrackService } from "@/lib/services/TrackService";
+import { getAlbumIdForTrackKey, Track, TrackService } from "@/lib/services/TrackService";
 import { _Object } from "@aws-sdk/client-s3";
 
 
@@ -28,6 +28,7 @@ export function Indexing() {
       key,
       size: obj.Size || 0,
       lastModified: obj.LastModified || new Date(),
+      albumId: getAlbumIdForTrackKey(key),
       album,
       fileName,
     };
@@ -87,7 +88,7 @@ export function Indexing() {
         setProgress(50);
 
         // Save tracks to cache
-        trackService.saveTracks(Object.fromEntries(tracks.map((t) => [t.key, t])));
+        trackService.mergeIndexedTracks(Object.fromEntries(tracks.map((t) => [t.key, t])));
 
         // Process tracks concurrently in batches to speed up metadata population without overloading the device
         const concurrencyLimit = 5;

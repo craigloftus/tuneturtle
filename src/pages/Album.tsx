@@ -9,7 +9,6 @@ import { usePlayer } from "@/context/PlayerContext";
 import { useTrackActions } from "@/hooks/use-track-actions";
 import { findAlbumArtUUID, findArtistName } from "@/lib/services/TrackService";
 import { useToast } from "@/hooks/use-toast";
-import { slugify } from "@/lib/utils";
 
 export function Album() {
   const [, navigate] = useLocation();
@@ -19,10 +18,11 @@ export function Album() {
   const { toast } = useToast();
   const { downloadTrack, deleteTrack, downloadingTrackKeys } = useTrackActions();
   const [isAlbumDownloading, setIsAlbumDownloading] = useState(false);
+  const decodedAlbumId = albumId ? decodeURIComponent(albumId) : "";
 
   const selectedAlbum = useMemo(
-    () => albums.find((album) => slugify(album.name) === (albumId || "")) || null,
-    [albums, albumId]
+    () => albums.find((album) => album.id === decodedAlbumId) || null,
+    [albums, decodedAlbumId]
   );
 
   const selectedAlbumTracks = useMemo(() => selectedAlbum?.tracks || [], [selectedAlbum]);

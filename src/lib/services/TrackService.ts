@@ -22,6 +22,7 @@ export interface Track {
   key: string;
   size: number;
   lastModified: Date;
+  albumId: string;
   album: string;
   fileName: string;
   metadata?: TrackMetadata;
@@ -31,11 +32,15 @@ export interface Track {
 }
 
 export interface Album {
+  id: string;
   name: string;
   tracks: Track[];
-  coverUrl?: string;
-  selected?: boolean;
 }
+
+export const getAlbumIdForTrackKey = (key: string): string => {
+  const pathParts = key.split("/").filter(Boolean);
+  return pathParts.length > 1 ? pathParts.slice(0, -1).join("/") : "__root__";
+};
 
 // Moved from AlbumList.tsx
 export const findAlbumArtUUID = (tracks: Track[]): string | null | undefined => {
@@ -67,11 +72,18 @@ interface Tracks {
   [key: string]: Track;
 }
 
+const TRACKS_STORAGE_KEY = "tracks";
+
 export class TrackService {
   private static instance: TrackService;
   private readonly METADATA_BYTE_RANGE = 5000;
   private s3Service = S3Service.getInstance();
   private fileStorageService = FileStorageService.getInstance();
+  private listeners = new Set<() => void>();
+  private snapshotCache = {
+    rawValue: null as string | null,
+    tracks: [] as Track[],
+  };
   private constructor() {}
 
   public static getInstance(): TrackService {
@@ -83,7 +95,8 @@ export class TrackService {
   
   public saveTracks(tracks: Tracks): void {
     try {
-      localStorage.setItem('tracks', JSON.stringify(tracks));
+      localStorage.setItem(TRACKS_STORAGE_KEY, JSON.stringify(tracks));
+      this.emitChange();
     } catch (error) {
       console.error('[CacheService] Failed to save tracks:', error);
     }
@@ -91,12 +104,34 @@ export class TrackService {
   
   public getTracks(): Tracks | null {
     try {
-      const stored = localStorage.getItem('tracks');
+      const stored = localStorage.getItem(TRACKS_STORAGE_KEY);
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
       console.error('[CacheService] Failed to retrieve tracks:', error);
       return null;
     }
+  }
+
+  public mergeIndexedTracks(indexedTracks: Tracks): void {
+    const existingTracks = this.getTracks() ?? {};
+    const mergedTracks = Object.fromEntries(
+      Object.entries(indexedTracks).map(([key, track]) => {
+        const existingTrack = existingTracks[key];
+
+        return [
+          key,
+          {
+            ...track,
+            metadata: existingTrack?.metadata,
+            downloaded: existingTrack?.downloaded,
+            localPath: existingTrack?.localPath,
+            albumArtPath: existingTrack?.albumArtPath,
+          },
+        ];
+      })
+    );
+
+    this.saveTracks(mergedTracks);
   }
 
   public updateTrack(track: Track) {
@@ -107,6 +142,42 @@ export class TrackService {
 
     tracks[track.key] = track;
     this.saveTracks(tracks);
+  }
+
+  public subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === TRACKS_STORAGE_KEY) {
+        listener();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      this.listeners.delete(listener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  };
+
+  public getSnapshot = (): Track[] => {
+    const rawValue = localStorage.getItem(TRACKS_STORAGE_KEY);
+    if (rawValue === this.snapshotCache.rawValue) {
+      return this.snapshotCache.tracks;
+    }
+
+    const tracks = this.getTracks();
+    this.snapshotCache = {
+      rawValue,
+      tracks: tracks ? Object.values(tracks) : [],
+    };
+
+    return this.snapshotCache.tracks;
+  };
+
+  public refresh(): void {
+    this.emitChange();
   }
 
   public getMimeType(extension: string): string {
@@ -211,5 +282,11 @@ export class TrackService {
       duration: format.duration || 0,
       bitrate: format.bitrate || 0,
     };
+  }
+
+  private emitChange(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 }

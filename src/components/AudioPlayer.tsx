@@ -35,17 +35,16 @@ export function AudioPlayer({ track, onNext, onPrevious }: AudioPlayerProps) {
 
     if (!audio || !track) return;
 
-    const handleError = async (e: ErrorEvent) => {
+    const handleError = () => {
       let errorMessage = "Unable to access or play audio file.";
+      const errorCode = audio.error?.code;
 
-      // Handle format-specific errors
-      if (e.message.includes("MEDIA_ERR_SRC_NOT_SUPPORTED")) {
-        const format =
-          track.fileName.split(".").pop()?.toUpperCase() || "Unknown";
+      if (errorCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        const format = track.fileName.split(".").pop()?.toUpperCase() || "Unknown";
         errorMessage = `This browser doesn't support ${format} format. Try converting to MP3.`;
-      } else if (e.message.includes("MEDIA_ERR_DECODE")) {
+      } else if (errorCode === MediaError.MEDIA_ERR_DECODE) {
         errorMessage = "Audio file is corrupted or in an unsupported format.";
-      } else if (e.message.includes("MEDIA_ERR_NETWORK")) {
+      } else if (errorCode === MediaError.MEDIA_ERR_NETWORK) {
         errorMessage = "Network error while loading the audio file.";
       }
 
