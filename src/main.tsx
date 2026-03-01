@@ -10,7 +10,8 @@ import { PlaylistProvider } from "@/context/PlaylistContext";
 import { Header } from "@/components/Header";
 
 import { Home } from "./pages/Home";
-const Setup = lazy(() => import("./pages/Setup").then((module) => ({ default: module.Setup })));
+import { Marketing } from "./pages/Marketing";
+import { Setup } from "./pages/Setup";
 const Indexing = lazy(() => import("./pages/Indexing").then((module) => ({ default: module.Indexing })));
 const Album = lazy(() => import("./pages/Album").then((module) => ({ default: module.Album })));
 const AudioPlayer = lazy(() => import("./components/AudioPlayer").then((module) => ({ default: module.AudioPlayer })));
@@ -30,10 +31,23 @@ function ToastSlot() {
 
 function App() {
   useEffect(() => {
-    window.dispatchEvent(new Event("app-ready"));
+    const frame = requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("app-ready"));
+    });
+
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const [location] = useLocation();
+
+  // Re-check credentials on every navigation so we catch setup completion
+  const [hasCredentials, setHasCredentials] = useState(() =>
+    Boolean(localStorage.getItem("aws_credentials"))
+  );
+  useEffect(() => {
+    setHasCredentials(Boolean(localStorage.getItem("aws_credentials")));
+  }, [location]);
+
   const [showLocalOnly, setShowLocalOnly] = useState(() => {
     const cached = localStorage.getItem("showLocalOnly");
     return cached === "true";
@@ -47,6 +61,11 @@ function App() {
   const isIndexing = location === "/indexing";
   const isHome = location === "/";
   const { currentTrack } = usePlayer();
+
+  // New users on the home page see the marketing landing
+  if (isHome && !hasCredentials) {
+    return <Marketing />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col">

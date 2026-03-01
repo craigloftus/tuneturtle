@@ -20,7 +20,7 @@ export function Header({
   const [, navigate] = useLocation();
 
   return (
-      <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-4 md:px-6 py-4 bg-gradient-to-r from-emerald-600/5 to-teal-700/5 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b border-emerald-600/10">
+      <div className="sticky top-0 left-0 right-0 flex justify-between items-center px-4 md:px-6 py-4 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 border-b border-border">
         <div className="flex items-center space-x-2">
           <img
             src="/static/base_turtle.avif"
@@ -31,8 +31,8 @@ export function Header({
             onClick={() => navigate("/")}
           />
           <h1 className="text-2xl font-bold tracking-tight cursor-pointer" onClick={() => navigate("/")}>
-            <span className="text-emerald-600 hover:text-emerald-500 transition-colors">Tune</span>
-            <span className="text-emerald-400 hover:text-emerald-300 transition-colors">Turtle</span>
+            <span className="text-primary hover:text-primary/80 transition-colors">Tune</span>
+            <span className="text-primary/70 hover:text-primary/60 transition-colors">Turtle</span>
           </h1>
         </div>
         <div className="flex items-center space-x-3 min-h-10">
